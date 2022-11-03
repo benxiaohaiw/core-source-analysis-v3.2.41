@@ -93,6 +93,7 @@ export interface SFCParseResult {
 
 const sourceToSFC = createCache<SFCParseResult>()
 
+// sfc的解析函数
 export function parse(
   source: string,
   {
@@ -101,16 +102,18 @@ export function parse(
     sourceRoot = '',
     pad = false,
     ignoreEmpty = true,
-    compiler = CompilerDOM
+    compiler = CompilerDOM // @vue/compiler-dom
   }: SFCParseOptions = {}
 ): SFCParseResult {
   const sourceKey =
     source + sourceMap + filename + sourceRoot + pad + compiler.parse
   const cache = sourceToSFC.get(sourceKey)
+  // 先看缓存
   if (cache) {
     return cache
   }
 
+  // 准备一个描述符对象
   const descriptor: SFCDescriptor = {
     filename,
     source,
@@ -125,16 +128,22 @@ export function parse(
   }
 
   const errors: (CompilerError | SyntaxError)[] = []
+
+  // 使用编译器进行parse，这直接会生成对应的ast语法树
   const ast = compiler.parse(source, {
+    // SFC 解析级别没有组件
     // there are no components at SFC parsing level
-    isNativeTag: () => true,
+    isNativeTag: () => true, // 一律返回true
     // preserve all whitespaces
     isPreTag: () => true,
+    // 获取文本模式
     getTextMode: ({ tag, props }, parent) => {
+      // 除<template>外的所有顶级元素都被解析为raw text容器
       // all top level elements except <template> are parsed as raw text
       // containers
       if (
         (!parent && tag !== 'template') ||
+        // <template lang="xxx">也应被视为raw text
         // <template lang="xxx"> should also be treated as raw text
         (tag === 'template' &&
           props.some(
@@ -148,6 +157,7 @@ export function parse(
       ) {
         return TextModes.RAWTEXT
       } else {
+        // 其它的都是TextModes.DATA
         return TextModes.DATA
       }
     },
@@ -156,10 +166,13 @@ export function parse(
     }
   })
 
+  // 这个ast语法树返回的一个root节点
+  // 对ast语法树的孩子直接进行遍历
   ast.children.forEach(node => {
     if (node.type !== NodeTypes.ELEMENT) {
       return
     }
+    // 我们只想保留不为空的节点（当标签不是template时）
     // we only want to keep the nodes that are not empty (when the tag is not a template)
     if (
       ignoreEmpty &&
@@ -172,11 +185,13 @@ export function parse(
     switch (node.tag) {
       case 'template':
         if (!descriptor.template) {
+          // 创建template块对象
           const templateBlock = (descriptor.template = createBlock(
             node,
             source,
             false
           ) as SFCTemplateBlock)
+          // 对应的ast保存当前node
           templateBlock.ast = node
 
           // warn against 2.x <template functional>
@@ -195,7 +210,9 @@ export function parse(
         }
         break
       case 'script':
+        // 创建script块
         const scriptBlock = createBlock(node, source, pad) as SFCScriptBlock
+        // 是否为setup
         const isSetup = !!scriptBlock.attrs.setup
         if (isSetup && !descriptor.scriptSetup) {
           descriptor.scriptSetup = scriptBlock
@@ -208,6 +225,7 @@ export function parse(
         errors.push(createDuplicateBlockError(node, isSetup))
         break
       case 'style':
+        // 创建样式块
         const styleBlock = createBlock(node, source, pad) as SFCStyleBlock
         if (styleBlock.attrs.vars) {
           errors.push(
@@ -264,21 +282,26 @@ export function parse(
     descriptor.customBlocks.forEach(genMap)
   }
 
+  // 解析css变量
   // parse CSS vars
   descriptor.cssVars = parseCssVars(descriptor)
 
+  // 检查这个sfc是否使用了:slotted
+  // 也就是style标签内容中是否出现/(?:::v-|:)slotted\(/这个正则对象
   // check if the SFC uses :slotted
   const slottedRE = /(?:::v-|:)slotted\(/
   descriptor.slotted = descriptor.styles.some(
     s => s.scoped && slottedRE.test(s.content)
   )
 
+  // 作为一个结果对象返回
   const result = {
     descriptor,
     errors
   }
+  // 缓存结果
   sourceToSFC.set(sourceKey, result)
-  return result
+  return result // 返回结果对象
 }
 
 function createDuplicateBlockError(
@@ -294,6 +317,7 @@ function createDuplicateBlockError(
   return err
 }
 
+// 创建对应的块对象
 function createBlock(
   node: ElementNode,
   source: string,
@@ -305,7 +329,7 @@ function createBlock(
   if (node.children.length) {
     start = node.children[0].loc.start
     end = node.children[node.children.length - 1].loc.end
-    content = source.slice(start.offset, end.offset)
+    content = source.slice(start.offset, end.offset) // content为source的提取字符串
   } else {
     const offset = node.loc.source.indexOf(`</`)
     if (offset > -1) {
@@ -322,7 +346,8 @@ function createBlock(
     start,
     end
   }
-  const attrs: Record<string, string | true> = {}
+  const attrs: Record<string, string | true> = {} // 看他的这个类型标识
+  // 准备sfc block对象
   const block: SFCBlock = {
     type,
     content,
@@ -332,6 +357,8 @@ function createBlock(
   if (pad) {
     block.content = padContent(source, block, pad) + block.content
   }
+  // 对此节点的属性进行遍历
+  // 
   node.props.forEach(p => {
     if (p.type === NodeTypes.ATTRIBUTE) {
       attrs[p.name] = p.value ? p.value.content || true : true
@@ -345,11 +372,13 @@ function createBlock(
         } else if (p.name === 'module') {
           ;(block as SFCStyleBlock).module = attrs[p.name]
         }
-      } else if (type === 'script' && p.name === 'setup') {
+      } else if (type === 'script' && p.name === 'setup') { // 针对setup
+        // 给块对象上添加setup属性
         ;(block as SFCScriptBlock).setup = attrs.setup
       }
     }
   })
+  // 返回block对象
   return block
 }
 

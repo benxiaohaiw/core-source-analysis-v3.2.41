@@ -17,6 +17,8 @@ import {
 import { V_ON_WITH_MODIFIERS, V_ON_WITH_KEYS } from '../runtimeHelpers'
 import { makeMap, capitalize } from '@vue/shared'
 
+// +++
+// +++
 const isEventOptionModifier = /*#__PURE__*/ makeMap(`passive,once,capture`)
 const isNonKeyModifier = /*#__PURE__*/ makeMap(
   // event propagation management
@@ -32,7 +34,10 @@ const isKeyboardEvent = /*#__PURE__*/ makeMap(
   `onkeyup,onkeydown,onkeypress`,
   true
 )
+// +++
+// +++
 
+// 解析修饰符的
 const resolveModifiers = (
   key: ExpressionNode,
   modifiers: string[],
@@ -109,12 +114,14 @@ const transformClick = (key: ExpressionNode, event: string) => {
 export const transformOn: DirectiveTransform = (dir, node, context) => {
   return baseTransform(dir, node, context, baseResult => {
     const { modifiers } = dir
+    /// 没有修饰符直接返回baseResult
     if (!modifiers.length) return baseResult
 
     let { key, value: handlerExp } = baseResult.props[0]
     const { keyModifiers, nonKeyModifiers, eventOptionModifiers } =
-      resolveModifiers(key, modifiers, context, dir.loc)
+      resolveModifiers(key, modifiers, context, dir.loc) // 解析修饰符
 
+    // 序列化 click.right 和 click.middle 因为它们实际上并没有触发
     // normalize click.right and click.middle since they don't actually fire
     if (nonKeyModifiers.includes('right')) {
       key = transformClick(key, `onContextmenu`)
@@ -124,18 +131,19 @@ export const transformOn: DirectiveTransform = (dir, node, context) => {
     }
 
     if (nonKeyModifiers.length) {
-      handlerExp = createCallExpression(context.helper(V_ON_WITH_MODIFIERS), [
-        handlerExp,
-        JSON.stringify(nonKeyModifiers)
+      handlerExp = createCallExpression(context.helper(V_ON_WITH_MODIFIERS), [ // V_ON_WITH_MODIFIERS调用表达式节点
+        handlerExp, // 参数1
+        JSON.stringify(nonKeyModifiers) // 参数2
       ])
     }
 
     if (
       keyModifiers.length &&
+      // 如果事件名称是动态的，则始终使用键保护包装
       // if event name is dynamic, always wrap with keys guard
       (!isStaticExp(key) || isKeyboardEvent(key.content))
     ) {
-      handlerExp = createCallExpression(context.helper(V_ON_WITH_KEYS), [
+      handlerExp = createCallExpression(context.helper(V_ON_WITH_KEYS), [ // V_ON_WITH_KEYS调用表达式节点
         handlerExp,
         JSON.stringify(keyModifiers)
       ])
@@ -148,8 +156,17 @@ export const transformOn: DirectiveTransform = (dir, node, context) => {
         : createCompoundExpression([`(`, key, `) + "${modifierPostfix}"`])
     }
 
+    // +++
+    // 其实就是根据+++修饰符+++再进一步的去处理key和value
+    // +++
+    
+    // +++
+    // 其实就是处理相应的事件名
+    // 和事件对应的处理函数
+    // +++
+
     return {
-      props: [createObjectProperty(key, handlerExp)]
+      props: [createObjectProperty(key, handlerExp)] // 创建对象属性节点
     }
   })
 }

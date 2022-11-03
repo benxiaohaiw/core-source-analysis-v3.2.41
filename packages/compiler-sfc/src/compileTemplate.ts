@@ -99,6 +99,7 @@ function preprocess(
   return res
 }
 
+// 对template block进行编译
 export function compileTemplate(
   options: SFCTemplateCompileOptions
 ): SFCTemplateCompileResults {
@@ -116,6 +117,7 @@ export function compileTemplate(
     )
   }
 
+  // 语言的预处理器
   const preprocessor = preprocessLang
     ? preprocessCustomRequire
       ? preprocessCustomRequire(preprocessLang)
@@ -149,10 +151,12 @@ export function compileTemplate(
       ]
     }
   } else {
+    // template中不使用预处理器的化默认都是这个逻辑
     return doCompileTemplate(options)
   }
 }
 
+// 做编译模板逻辑
 function doCompileTemplate({
   filename,
   id,
@@ -163,7 +167,7 @@ function doCompileTemplate({
   ssr = false,
   ssrCssVars,
   isProd = false,
-  compiler = ssr ? (CompilerSSR as TemplateCompiler) : CompilerDOM,
+  compiler = ssr ? (CompilerSSR as TemplateCompiler) : CompilerDOM, // 也是@vue/compiler-dom
   compilerOptions = {},
   transformAssetUrls
 }: SFCTemplateCompileOptions): SFCTemplateCompileResults {
@@ -195,10 +199,11 @@ function doCompileTemplate({
   const shortId = id.replace(/^data-v-/, '')
   const longId = `data-v-${shortId}`
 
-  let { code, ast, preamble, map } = compiler.compile(source, {
-    mode: 'module',
+  // 使用编译器的编译函数对source进行编译，生成对应的代码字符串
+  let { code, ast, preamble, map } = compiler.compile(source, { // @vue/compiler-dom下的ccompile函数
+    mode: 'module', // 模式为module
     prefixIdentifiers: true,
-    hoistStatic: true,
+    hoistStatic: true, // 静态提升
     cacheHandlers: true,
     ssrCssVars:
       ssr && ssrCssVars && ssrCssVars.length
@@ -207,8 +212,10 @@ function doCompileTemplate({
     scopeId: scoped ? longId : undefined,
     slotted,
     sourceMap: true,
+    // vite/packages/plugin-vue/src/template.ts中也没有什么值得注意的编译参数选项
     ...compilerOptions,
-    nodeTransforms: nodeTransforms.concat(compilerOptions.nodeTransforms || []),
+    // vite/packages/plugin-vue/src/template.ts也没有再添加节点转换函数数组了，所以这里面的默认的就够用了
+    nodeTransforms: nodeTransforms.concat(compilerOptions.nodeTransforms || []), // 节点转换函数数组
     filename,
     onError: e => errors.push(e),
     onWarn: w => warnings.push(w)
@@ -238,6 +245,8 @@ function doCompileTemplate({
     return msg
   })
 
+  // 直接返回代码字符串
+  // preamble: 前言
   return { code, ast, preamble, source, errors, tips, map }
 }
 

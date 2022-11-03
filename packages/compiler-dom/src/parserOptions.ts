@@ -16,6 +16,7 @@ const isRawTextContainer = /*#__PURE__*/ makeMap(
   true
 )
 
+// dom命名空间
 export const enum DOMNamespaces {
   HTML = Namespaces.HTML,
   SVG,
@@ -23,11 +24,14 @@ export const enum DOMNamespaces {
 }
 
 export const parserOptions: ParserOptions = {
+  // 是否为空标签
   isVoidTag,
+  // 是否为原生标签
   isNativeTag: tag => isHTMLTag(tag) || isSVGTag(tag),
   isPreTag: tag => tag === 'pre',
   decodeEntities: __BROWSER__ ? decodeHtmlBrowser : decodeHtml,
 
+  // 是否为内置组件标签
   isBuiltInComponent: (tag: string): symbol | undefined => {
     if (isBuiltInType(tag, `Transition`)) {
       return TRANSITION
@@ -36,9 +40,10 @@ export const parserOptions: ParserOptions = {
     }
   },
 
+  // 获取标签的命名空间
   // https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher
   getNamespace(tag: string, parent: ElementNode | undefined): DOMNamespaces {
-    let ns = parent ? parent.ns : DOMNamespaces.HTML
+    let ns = parent ? parent.ns : DOMNamespaces.HTML // 默认为DOMNamespaces.HTML命名空间
 
     if (parent && ns === DOMNamespaces.MATH_ML) {
       if (parent.tag === 'annotation-xml') {
@@ -82,19 +87,22 @@ export const parserOptions: ParserOptions = {
         return DOMNamespaces.MATH_ML
       }
     }
-    return ns
+    return ns // 正常情况大部分都是返回的DOMNamespaces.HTML
   },
 
+  // 获取文本模式
   // https://html.spec.whatwg.org/multipage/parsing.html#parsing-html-fragments
   getTextMode({ tag, ns }: ElementNode): TextModes {
     if (ns === DOMNamespaces.HTML) {
       if (tag === 'textarea' || tag === 'title') {
         return TextModes.RCDATA
       }
+      // style,iframe,script,noscript标签
       if (isRawTextContainer(tag)) {
         return TextModes.RAWTEXT
       }
     }
+    // 其它的返回TextModes.DATA
     return TextModes.DATA
   }
 }

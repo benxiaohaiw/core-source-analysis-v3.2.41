@@ -10,6 +10,7 @@ import type {
 } from '@babel/types'
 import { walk } from 'estree-walker'
 
+// 迭代标识符
 export function walkIdentifiers(
   root: Node,
   onIdentifier: (
@@ -45,10 +46,10 @@ export function walkIdentifiers(
         return this.skip()
       }
       if (node.type === 'Identifier') {
-        const isLocal = !!knownIds[node.name]
+        const isLocal = !!knownIds[node.name] // 是否是本地的
         const isRefed = isReferencedIdentifier(node, parent!, parentStack)
         if (includeAll || (isRefed && !isLocal)) {
-          onIdentifier(node, parent!, parentStack, isRefed, isLocal)
+          onIdentifier(node, parent!, parentStack, isRefed, isLocal) // 响应onIdentifier
         }
       } else if (
         node.type === 'ObjectProperty' &&

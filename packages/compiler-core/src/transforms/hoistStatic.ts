@@ -25,15 +25,63 @@ import {
   NORMALIZE_STYLE
 } from '../runtimeHelpers'
 
+// 静态提升
 export function hoistStatic(root: RootNode, context: TransformContext) {
+  // 开始迭代
   walk(
-    root,
+    root, // 从根开始
     context,
+    // 不幸的是，根节点是不可提升的，因为有潜在的父节点坠落属性。
     // Root node is unfortunately non-hoistable due to potential parent
     // fallthrough attributes.
-    isSingleElementRoot(root, root.children[0])
+    isSingleElementRoot(root, root.children[0]) // 是否为单元素根
   )
 }
+
+/* 
+
+<script setup>
+import { ref } from 'vue'
+
+const msg = ref('Hello World!')
+</script>
+
+<template>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+</template>
+
+*/
+
+/* Analyzed bindings: {
+  "ref": "setup-const",
+  "msg": "setup-ref"
+} */
+// import { createElementVNode as _createElementVNode, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock } from "vue"
+
+// const _hoisted_1 = /*#__PURE__*/_createElementVNode("h2", null, "张佳宁", -1 /* HOISTED */)
+// const _hoisted_2 = /*#__PURE__*/_createElementVNode("h2", null, "张佳宁", -1 /* HOISTED */)
+
+// import { ref } from 'vue'
+
+
+// const __sfc__ = {
+//   __name: 'App',
+//   setup(__props) {
+
+// const msg = ref('Hello World!')
+
+// return (_ctx, _cache) => {
+//   return (_openBlock(), _createElementBlock(_Fragment, null, [
+//     _hoisted_1,
+//     _hoisted_2
+//   ], 64 /* STABLE_FRAGMENT */))
+// }
+// }
+
+// }
+// __sfc__.__file = "App.vue"
+// export default __sfc__
 
 export function isSingleElementRoot(
   root: RootNode,
@@ -47,34 +95,42 @@ export function isSingleElementRoot(
   )
 }
 
+// 迭代节点
 function walk(
   node: ParentNode,
   context: TransformContext,
   doNotHoistNode: boolean = false
 ) {
+  // 取出节点的孩子
   const { children } = node
-  const originalCount = children.length
-  let hoistedCount = 0
+  const originalCount = children.length // 孩子的原始数量
+  let hoistedCount = 0 // 已提升的数量
 
+  // 遍历孩子
   for (let i = 0; i < children.length; i++) {
     const child = children[i]
+    // ---
+    // 只有普通元素和文本调用才有资格提升。
+    // ---
     // only plain elements & text calls are eligible for hoisting.
     if (
       child.type === NodeTypes.ELEMENT &&
       child.tagType === ElementTypes.ELEMENT
     ) {
       const constantType = doNotHoistNode
-        ? ConstantTypes.NOT_CONSTANT
+        ? ConstantTypes.NOT_CONSTANT // 0
         : getConstantType(child, context)
       if (constantType > ConstantTypes.NOT_CONSTANT) {
         if (constantType >= ConstantTypes.CAN_HOIST) {
           ;(child.codegenNode as VNodeCall).patchFlag =
-            PatchFlags.HOISTED + (__DEV__ ? ` /* HOISTED */` : ``)
+            PatchFlags.HOISTED + (__DEV__ ? ` /* HOISTED */` : ``) // -1
           child.codegenNode = context.hoist(child.codegenNode!)
+          // 当前的这个child.codegenNode是一个identifier，他有个属性hoisted值为原有的child.codegenNode
           hoistedCount++
           continue
         }
       } else {
+        // 节点可能包含动态子节点，但其props可能符合提升的条件。
         // node may contain dynamic children, but its props may be eligible for
         // hoisting.
         const codegenNode = child.codegenNode!
@@ -99,6 +155,7 @@ function walk(
       }
     }
 
+    // 进一步迭代
     // walk further
     if (child.type === NodeTypes.ELEMENT) {
       const isComponent = child.tagType === ElementTypes.COMPONENT
@@ -110,10 +167,12 @@ function walk(
         context.scopes.vSlot--
       }
     } else if (child.type === NodeTypes.FOR) {
+      // 不要为v-for单个孩子进行提升因为它应该是一个块
       // Do not hoist v-for single child because it has to be a block
       walk(child, context, child.children.length === 1)
     } else if (child.type === NodeTypes.IF) {
       for (let i = 0; i < child.branches.length; i++) {
+        // 不要为v-if单个孩子进行提升因为它应该是一个块
         // Do not hoist v-if single child because it has to be a block
         walk(
           child.branches[i],
@@ -124,10 +183,12 @@ function walk(
     }
   }
 
+  // 执行转换提升函数
   if (hoistedCount && context.transformHoist) {
-    context.transformHoist(children, context, node)
+    context.transformHoist(children, context, node) // 孩子 上下文 父节点
   }
 
+  // 所有的孩子都是被提升的 - 整个孩子数组入口都是可提升的
   // all children were hoisted - the entire children array is hoistable.
   if (
     hoistedCount &&
@@ -173,8 +234,11 @@ export function getConstantType(
       if (!flag) {
         let returnType = ConstantTypes.CAN_STRINGIFY
 
+        // 元素本身没有patch标志。但是我们仍然需要检查：
         // Element itself has no patch flag. However we still need to check:
 
+        // 即使对于没有补丁标志的节点，它也可能包含引用范围变量的不可提升表达式，例如编译器注入的keys或cached event handlers。
+        // 因此，我们需要始终检查codegenNode的props以确保这一点。
         // 1. Even for a node with no patch flag, it is possible for it to contain
         // non-hoistable expressions that refers to scope variables, e.g. compiler
         // injected keys or cached event handlers. Therefore we need to always
@@ -188,6 +252,7 @@ export function getConstantType(
           returnType = generatedPropsType
         }
 
+        // 它的孩子
         // 2. its children.
         for (let i = 0; i < node.children.length; i++) {
           const childType = getConstantType(node.children[i], context)
@@ -200,6 +265,7 @@ export function getConstantType(
           }
         }
 
+        // 如果类型还不是CAN_SKIP_PATCH，这是最低的非0类型，检查是否有任何道具可以导致类型降低，我们可以跳过can_patch，因为它是由没有patchFlag保证的。
         // 3. if the type is not already CAN_SKIP_PATCH which is the lowest non-0
         // type, check if any of the props can cause the type to be lowered
         // we can skip can_patch because it's guaranteed by the absence of a
@@ -220,10 +286,12 @@ export function getConstantType(
           }
         }
 
+        // 这里只有svg/foreignObject可以是块，但是如果它们是静态的，那么它们就不需要是块，因为没有嵌套的更新。
         // only svg/foreignObject could be block here, however if they are
         // static then they don't need to be blocks since there will be no
         // nested updates.
         if (codegenNode.isBlock) {
+          // 除了设置自定义指令。
           // except set custom directives.
           for (let i = 0; i < node.props.length; i++) {
             const p = node.props[i]

@@ -86,6 +86,7 @@ export interface CodegenContext
   newline(): void
 }
 
+// 创建codegen上下文
 function createCodegenContext(
   ast: RootNode,
   {
@@ -117,7 +118,7 @@ function createCodegenContext(
     isTS,
     inSSR,
     source: ast.loc.source,
-    code: ``,
+    code: ``, // 最终生成的代码
     column: 1,
     line: 1,
     offset: 0,
@@ -189,17 +190,22 @@ function createCodegenContext(
   return context
 }
 
+// 生成
 export function generate(
   ast: RootNode,
   options: CodegenOptions & {
     onContextCreated?: (context: CodegenContext) => void
   } = {}
 ): CodegenResult {
-  const context = createCodegenContext(ast, options)
+  // 创建codegen上下文
+  const context = createCodegenContext(ast, options) // 其中context.code是保存代码的变量
+
+  // 执行上下文已创建钩子函数
   if (options.onContextCreated) options.onContextCreated(context)
+  
   const {
-    mode,
-    push,
+    mode, // 模式
+    push, // push函数
     prefixIdentifiers,
     indent,
     deindent,
@@ -208,100 +214,138 @@ export function generate(
     ssr
   } = context
 
+  // 是否有助手
   const hasHelpers = ast.helpers.length > 0
+  // 是否使用with块 - with() {}
   const useWithBlock = !prefixIdentifiers && mode !== 'module'
+  // 是否生成作用域id
   const genScopeId = !__BROWSER__ && scopeId != null && mode === 'module'
+  // 是否是setup内联 - <script setup>
   const isSetupInlined = !__BROWSER__ && !!options.inline
 
+  // 前言
+  // 在setup()内联模式下，在子上下文中生成前言并分别返回。
   // preambles
   // in setup() inline mode, the preamble is generated in a sub context
   // and returned separately.
-  const preambleContext = isSetupInlined
-    ? createCodegenContext(ast, options)
-    : context
-  if (!__BROWSER__ && mode === 'module') {
+  const preambleContext = isSetupInlined // 是setup内联模式
+    ? createCodegenContext(ast, options) // 再次创建一个上下文 - 作为子上下文
+    : context // 否则直接使用上面的上下文
+  
+  if (!__BROWSER__ && mode === 'module') { // 这个是在node.js下
+    // +++
+    // 生成模块前言
+    // +++
     genModulePreamble(ast, preambleContext, genScopeId, isSetupInlined)
-  } else {
+  } else { // 这个是在浏览器端
+    // 生成函数前言
     genFunctionPreamble(ast, preambleContext)
   }
+
+  // 进入render函数
   // enter render function
-  const functionName = ssr ? `ssrRender` : `render`
+  const functionName = ssr ? `ssrRender` : `render` // 函数名render
+  // 准备render函数的参数
   const args = ssr ? ['_ctx', '_push', '_parent', '_attrs'] : ['_ctx', '_cache']
-  if (!__BROWSER__ && options.bindingMetadata && !options.inline) {
+
+  if (!__BROWSER__ && options.bindingMetadata && !options.inline) { // node端 且有绑定的元数据 且 不是内联模式
+    // 绑定优化参数
     // binding optimization args
     args.push('$props', '$setup', '$data', '$options')
   }
+  // 根据参数生成签名
   const signature =
     !__BROWSER__ && options.isTS
       ? args.map(arg => `${arg}: any`).join(',')
       : args.join(', ')
 
+      // 是setup内联
   if (isSetupInlined) {
-    push(`(${signature}) => {`)
+    push(`(${signature}) => {`) // (_ctx, _cache) => {
   } else {
-    push(`function ${functionName}(${signature}) {`)
+    push(`function ${functionName}(${signature}) {`) // function render(_ctx, _cache)
   }
-  indent()
+  indent() // 缩进
 
+  // 需要使用with块
   if (useWithBlock) {
-    push(`with (_ctx) {`)
-    indent()
+    push(`with (_ctx) {`) // with (_ctx) {
+    indent() // 缩进
+    // 函数模式的const声明应该在块内部，而且它们应该重命名，以避免与用户属性冲突
     // function mode const declarations should be inside with block
     // also they should be renamed to avoid collision with user properties
-    if (hasHelpers) {
-      push(`const { ${ast.helpers.map(aliasHelper).join(', ')} } = _Vue`)
-      push(`\n`)
-      newline()
+
+    if (hasHelpers) { // 是否有助手
+      push(`const { ${ast.helpers.map(aliasHelper).join(', ')} } = _Vue`) // 函数模式下让所需要的助手从_Vue中解构赋值
+      // 如：const { toDisplayString: _toDisplayString, createElementVNode: _createElementVNode, Fragment: _Fragment, openBlock: _openBlock, createElementBlock: _createElementBlock } = _Vue
+      push(`\n`) // \n换行
+      newline() // 新的一行
     }
   }
 
+
+  // const xxx = resolveComponent(...)
+  // 生成资源resolve语句
   // generate asset resolution statements
   if (ast.components.length) {
-    genAssets(ast.components, 'component', context)
+    genAssets(ast.components, 'component', context) // 生成component资源
     if (ast.directives.length || ast.temps > 0) {
-      newline()
+      newline() /// 是否新的一行
     }
   }
+  // const xxx = resolveDirective(...)
+  // 生成指令resolve语句
   if (ast.directives.length) {
     genAssets(ast.directives, 'directive', context)
     if (ast.temps > 0) {
       newline()
     }
   }
+
+  // 是否开启兼容 - 生成filter
   if (__COMPAT__ && ast.filters && ast.filters.length) {
     newline()
     genAssets(ast.filters, 'filter', context)
     newline()
   }
 
+  // 缓存
   if (ast.temps > 0) {
     push(`let `)
     for (let i = 0; i < ast.temps; i++) {
       push(`${i > 0 ? `, ` : ``}_temp${i}`)
     }
   }
+
+
   if (ast.components.length || ast.directives.length || ast.temps) {
     push(`\n`)
     newline()
   }
 
+  // 生成 VNode 树表达式
   // generate the VNode tree expression
   if (!ssr) {
-    push(`return `)
+    push(`return `) // return 
   }
-  if (ast.codegenNode) {
-    genNode(ast.codegenNode, context)
+  if (ast.codegenNode) { // 有codegenNode那么生成这个节点
+
+    // +++
+    genNode(ast.codegenNode, context) // VNode 树表达式的生成从这里开始
+    // +++
+    
   } else {
-    push(`null`)
+    push(`null`) // 没有直接null
   }
 
+  // with的结尾}
   if (useWithBlock) {
     deindent()
     push(`}`)
   }
 
   deindent()
-  push(`}`)
+  push(`}`) // 推一个}
 
   return {
     ast,
@@ -322,38 +366,45 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
     runtimeGlobalName,
     ssrRuntimeModuleName
   } = context
+
+  // Vue
   const VueBinding =
     !__BROWSER__ && ssr
       ? `require(${JSON.stringify(runtimeModuleName)})`
-      : runtimeGlobalName
+      : runtimeGlobalName // Vue
   // Generate const declaration for helpers
   // In prefix mode, we place the const declaration at top so it's done
   // only once; But if we not prefixing, we place the declaration inside the
   // with block so it doesn't incur the `in` check cost for every helper access.
+  // 有助手
   if (ast.helpers.length > 0) {
     if (!__BROWSER__ && prefixIdentifiers) {
       push(
         `const { ${ast.helpers.map(aliasHelper).join(', ')} } = ${VueBinding}\n`
       )
     } else {
+      // with模式
       // "with" mode.
       // save Vue in a separate variable to avoid collision
+      // const _Vue = Vue
       push(`const _Vue = ${VueBinding}\n`)
       // in "with" mode, helpers are declared inside the with block to avoid
       // has check cost, but hoists are lifted out of the function - we need
       // to provide the helper here.
+      // +++
+      // 是否有需要提升的
       if (ast.hoists.length) {
-        const staticHelpers = [
-          CREATE_VNODE,
-          CREATE_ELEMENT_VNODE,
-          CREATE_COMMENT,
-          CREATE_TEXT,
-          CREATE_STATIC
+        const staticHelpers = [ // 默认的静态助手
+          CREATE_VNODE, // 创建虚拟节点
+          CREATE_ELEMENT_VNODE, // 创建元素虚拟节点
+          CREATE_COMMENT, // 创建注释
+          CREATE_TEXT, // 创建文本
+          CREATE_STATIC // 创建文本
         ]
-          .filter(helper => ast.helpers.includes(helper))
+          .filter(helper => ast.helpers.includes(helper)) // 过滤出静态助手在当前是需要的
           .map(aliasHelper)
-          .join(', ')
-        push(`const { ${staticHelpers} } = _Vue\n`)
+          .join(', ') // 整合成字符串
+        push(`const { ${staticHelpers} } = _Vue\n`) // 再次的解构赋值
       }
     }
   }
@@ -366,11 +417,12 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
         .join(', ')} } = require("${ssrRuntimeModuleName}")\n`
     )
   }
-  genHoists(ast.hoists, context)
-  newline()
-  push(`return `)
+  genHoists(ast.hoists, context) // 生成提升
+  newline() // 新的一行
+  push(`return `) // return 
 }
 
+// 生成模块前言
 function genModulePreamble(
   ast: RootNode,
   context: CodegenContext,
@@ -385,13 +437,15 @@ function genModulePreamble(
     ssrRuntimeModuleName
   } = context
 
+  // 需要生成作用域id且有需要提升的
   if (genScopeId && ast.hoists.length) {
-    ast.helpers.push(PUSH_SCOPE_ID, POP_SCOPE_ID)
+    ast.helpers.push(PUSH_SCOPE_ID, POP_SCOPE_ID) // 再加PUSH_SCOPE_ID, POP_SCOPE_ID助手
   }
 
+  // 为助手生成import语句
   // generate import statements for helpers
   if (ast.helpers.length) {
-    if (optimizeImports) {
+    if (optimizeImports) { // 是否有优化的导入
       // when bundled with webpack with code-split, calling an import binding
       // as a function leads to it being wrapped with `Object(a.b)` or `(0,a.b)`,
       // incurring both payload size increase and potential perf overhead.
@@ -401,18 +455,19 @@ function genModulePreamble(
         `import { ${ast.helpers
           .map(s => helperNameMap[s])
           .join(', ')} } from ${JSON.stringify(runtimeModuleName)}\n`
-      )
+      ) // import { xxx } from 'Vue'
       push(
         `\n// Binding optimization for webpack code-split\nconst ${ast.helpers
           .map(s => `_${helperNameMap[s]} = ${helperNameMap[s]}`)
           .join(', ')}\n`
-      )
-    } else {
+      ) // const _xxx = xxx, 
+    } else { // 没有优化的导入
       push(
         `import { ${ast.helpers
           .map(s => `${helperNameMap[s]} as _${helperNameMap[s]}`)
-          .join(', ')} } from ${JSON.stringify(runtimeModuleName)}\n`
-      )
+          .join(', ')} } from ${JSON.stringify(runtimeModuleName /** Vue */)}\n`
+      ) // 直接形成 import { xxx as _xxx } from 'Vue'
+      // 这样的格式
     }
   }
 
@@ -424,24 +479,30 @@ function genModulePreamble(
     )
   }
 
+  // 导入的
   if (ast.imports.length) {
+    // 生成导入的
     genImports(ast.imports, context)
-    newline()
+    newline() // 新的一行
   }
 
+  // 生成提升的
   genHoists(ast.hoists, context)
-  newline()
+  newline() // 新的一行
 
+  // 不是内联也即是不是 <script setup>
   if (!inline) {
-    push(`export `)
+    push(`export `) // 推一个export 
   }
 }
 
+// 生成资源
 function genAssets(
   assets: string[],
   type: 'component' | 'directive' | 'filter',
   { helper, push, newline, isTS }: CodegenContext
 ) {
+  // 获取resolver
   const resolver = helper(
     __COMPAT__ && type === 'filter'
       ? RESOLVE_FILTER
@@ -449,14 +510,17 @@ function genAssets(
       ? RESOLVE_COMPONENT
       : RESOLVE_DIRECTIVE
   )
+  // 遍历资源
   for (let i = 0; i < assets.length; i++) {
-    let id = assets[i]
+    let id = assets[i] // 拿到资源id
+    // 从 SFC 文件名推断的潜在组件隐式自引用
     // potential component implicit self-reference inferred from SFC filename
-    const maybeSelfReference = id.endsWith('__self')
+    const maybeSelfReference = id.endsWith('__self') // 是否是自身
     if (maybeSelfReference) {
-      id = id.slice(0, -6)
+      id = id.slice(0, -6) // 额外处理id
     }
     push(
+      // 转为有效的资源id
       `const ${toValidAssetId(id, type)} = ${resolver}(${JSON.stringify(id)}${
         maybeSelfReference ? `, true` : ``
       })${isTS ? `!` : ``}`
@@ -467,15 +531,19 @@ function genAssets(
   }
 }
 
+// 生成提升
 function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
-  if (!hoists.length) {
+  if (!hoists.length) { // 没有要提升的就return
     return
   }
+  // 标记上下文是pure的
   context.pure = true
   const { push, newline, helper, scopeId, mode } = context
+  // 需要生成作用域id
   const genScopeId = !__BROWSER__ && scopeId != null && mode !== 'function'
-  newline()
+  newline() // 新的一行
 
+  // 生成内联的 withScopeId 助手
   // generate inlined withScopeId helper
   if (genScopeId) {
     push(
@@ -486,16 +554,18 @@ function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
     newline()
   }
 
+  // 遍历需要提升的
   for (let i = 0; i < hoists.length; i++) {
     const exp = hoists[i]
     if (exp) {
-      const needScopeIdWrapper = genScopeId && exp.type === NodeTypes.VNODE_CALL
+      const needScopeIdWrapper = genScopeId && exp.type === NodeTypes.VNODE_CALL // 是否需要作用域id的包裹
+      // 生成提升的字符串
       push(
         `const _hoisted_${i + 1} = ${
           needScopeIdWrapper ? `${PURE_ANNOTATION} _withScopeId(() => ` : ``
         }`
       )
-      genNode(exp, context)
+      genNode(exp, context) // 生成表达式节点对应的字符串
       if (needScopeIdWrapper) {
         push(`)`)
       }
@@ -503,16 +573,21 @@ function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
     }
   }
 
+  // 再次标记为false
   context.pure = false
 }
 
+// 生成导入
 function genImports(importsOptions: ImportItem[], context: CodegenContext) {
+  // 没有直接返回
   if (!importsOptions.length) {
     return
   }
+  // 遍历生成每条导入语句
+  // 如import xxx from 'x'
   importsOptions.forEach(imports => {
     context.push(`import `)
-    genNode(imports.exp, context)
+    genNode(imports.exp, context) // 生成表达式节点
     context.push(` from '${imports.path}'`)
     context.newline()
   })
@@ -569,15 +644,17 @@ function genNodeList(
   }
 }
 
+// 生成节点
 function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   if (isString(node)) {
-    context.push(node)
+    context.push(node) // 字符串直接推入
     return
   }
   if (isSymbol(node)) {
-    context.push(context.helper(node))
+    context.push(context.helper(node)) // 是symbol类型直接获取它的字符串
     return
   }
+  // 其它类型
   switch (node.type) {
     case NodeTypes.ELEMENT:
     case NodeTypes.IF:
@@ -591,49 +668,50 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       genNode(node.codegenNode!, context)
       break
     case NodeTypes.TEXT:
-      genText(node, context)
+      genText(node, context) // 文本
       break
     case NodeTypes.SIMPLE_EXPRESSION:
-      genExpression(node, context)
+      genExpression(node, context) // 简单表达式
       break
     case NodeTypes.INTERPOLATION:
-      genInterpolation(node, context)
+      genInterpolation(node, context) // 插值
       break
-    case NodeTypes.TEXT_CALL:
+    case NodeTypes.TEXT_CALL: // 生成文本调用 - 最终是函数调用表达式
       genNode(node.codegenNode, context)
       break
     case NodeTypes.COMPOUND_EXPRESSION:
-      genCompoundExpression(node, context)
+      genCompoundExpression(node, context) // 混合表达式
       break
     case NodeTypes.COMMENT:
-      genComment(node, context)
+      genComment(node, context) // 注释
       break
     case NodeTypes.VNODE_CALL:
-      genVNodeCall(node, context)
+      genVNodeCall(node, context) // 生成虚拟节点调用 // +++
       break
 
     case NodeTypes.JS_CALL_EXPRESSION:
-      genCallExpression(node, context)
+      genCallExpression(node, context) // 函数调用表达式
       break
     case NodeTypes.JS_OBJECT_EXPRESSION:
-      genObjectExpression(node, context)
+      genObjectExpression(node, context) // 对象表达式 +++
       break
     case NodeTypes.JS_ARRAY_EXPRESSION:
-      genArrayExpression(node, context)
+      genArrayExpression(node, context) // 数组表达式 +++
       break
     case NodeTypes.JS_FUNCTION_EXPRESSION:
-      genFunctionExpression(node, context)
+      genFunctionExpression(node, context) // 函数表达式 +++
       break
     case NodeTypes.JS_CONDITIONAL_EXPRESSION:
-      genConditionalExpression(node, context)
+      genConditionalExpression(node, context) // 条件表达式 +++
       break
     case NodeTypes.JS_CACHE_EXPRESSION:
-      genCacheExpression(node, context)
+      genCacheExpression(node, context) // 缓存表达式
       break
     case NodeTypes.JS_BLOCK_STATEMENT:
-      genNodeList(node.body, context, true, false)
+      genNodeList(node.body, context, true, false) // 块语句
       break
 
+    // ssr部分
     // SSR only types
     case NodeTypes.JS_TEMPLATE_LITERAL:
       !__BROWSER__ && genTemplateLiteral(node, context)
@@ -653,7 +731,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
 
     /* istanbul ignore next */
     case NodeTypes.IF_BRANCH:
-      // noop
+      // noop // 不
       break
     default:
       if (__DEV__) {
@@ -677,10 +755,11 @@ function genExpression(node: SimpleExpressionNode, context: CodegenContext) {
   context.push(isStatic ? JSON.stringify(content) : content, node)
 }
 
+// 生成插值
 function genInterpolation(node: InterpolationNode, context: CodegenContext) {
   const { push, helper, pure } = context
   if (pure) push(PURE_ANNOTATION)
-  push(`${helper(TO_DISPLAY_STRING)}(`)
+  push(`${helper(TO_DISPLAY_STRING)}(`) // 需要toDisplayString(...)
   genNode(node.content, context)
   push(`)`)
 }
@@ -740,30 +819,48 @@ function genVNodeCall(node: VNodeCall, context: CodegenContext) {
     disableTracking,
     isComponent
   } = node
-  if (directives) {
+  if (directives) { // 是否有指令 - withDirectives
     push(helper(WITH_DIRECTIVES) + `(`)
   }
+  // 是否为块 - openBlock
   if (isBlock) {
     push(`(${helper(OPEN_BLOCK)}(${disableTracking ? `true` : ``}), `)
   }
+  // pure注解
   if (pure) {
     push(PURE_ANNOTATION)
   }
+  // 调用助手
+  // +++
   const callHelper: symbol = isBlock
-    ? getVNodeBlockHelper(context.inSSR, isComponent)
-    : getVNodeHelper(context.inSSR, isComponent)
+    ? getVNodeBlockHelper(context.inSSR, isComponent) // ssr || isComponent ? CREATE_BLOCK : CREATE_ELEMENT_BLOCK
+    : getVNodeHelper(context.inSSR, isComponent) // ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE
+  // +++
+  
+  // +++
+  // 块的带block - 不带块的Vnode
+  // createBlock createVnode
+  // createElemnetBlock craeteElementVnode
+  // +++
+  
   push(helper(callHelper) + `(`, node)
+  // 生成节点列表
   genNodeList(
-    genNullableArgs([tag, props, children, patchFlag, dynamicProps]),
+    // 生成可null的参数 - 意思没有使用null
+    genNullableArgs([tag, props, children, patchFlag, dynamicProps]), // 标签、属性、孩子、比对标记、动态属性名
     context
   )
-  push(`)`)
-  if (isBlock) {
+  push(`)`) // )
+  if (isBlock) { // 是否是块
     push(`)`)
   }
+  // 是否有指令
   if (directives) {
-    push(`, `)
-    genNode(directives, context)
+    // +++
+    // +++
+    push(`, `) // ,[[vModelText, msg.value] /** 第一个指令v-model */, [] /** 第二个指令 */]) +++
+    genNode(directives, context) // 是一个数组表达式 - 可以在transformElements.ts中退出函数中看到 - 而每一项又是一个数组表达式（这个在构建指令参数函数中可看到）
+    // +++
     push(`)`)
   }
 }
@@ -828,10 +925,16 @@ function genFunctionExpression(
 ) {
   const { push, indent, deindent } = context
   const { params, returns, body, newline, isSlot } = node
+  
+  // +++
+  // 是插槽则需要_withCtx()进行包裹一下
+  // +++
   if (isSlot) {
+    // 使用所有者上下文包装插槽函数
     // wrap slot functions with owner context
     push(`_${helperNameMap[WITH_CTX]}(`)
   }
+
   push(`(`, node)
   if (isArray(params)) {
     genNodeList(params, context)
@@ -896,19 +999,21 @@ function genConditionalExpression(
   if (!isNested) {
     context.indentLevel++
   }
-  genNode(alternate, context)
+  genNode(alternate, context) // 对备用选项继续生成节点 - 那可能再又是个条件表达式（递归生成）
   if (!isNested) {
     context.indentLevel--
   }
   needNewline && deindent(true /* without newline */)
 }
 
+// 生成缓存表达式
 function genCacheExpression(node: CacheExpression, context: CodegenContext) {
   const { push, helper, indent, deindent, newline } = context
   push(`_cache[${node.index}] || (`)
+  // 表示缓存的是否为vnode
   if (node.isVNode) {
     indent()
-    push(`${helper(SET_BLOCK_TRACKING)}(-1),`)
+    push(`${helper(SET_BLOCK_TRACKING)}(-1),`) // SET_BLOCK_TRACKING运行时助手
     newline()
   }
   push(`_cache[${node.index}] = `)

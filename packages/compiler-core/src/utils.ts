@@ -47,12 +47,14 @@ import { PropsExpression } from './transforms/transformElement'
 import { parseExpression } from '@babel/parser'
 import { Expression } from '@babel/types'
 
+// 是静态表达式
 export const isStaticExp = (p: JSChildNode): p is SimpleExpressionNode =>
-  p.type === NodeTypes.SIMPLE_EXPRESSION && p.isStatic
+  p.type === NodeTypes.SIMPLE_EXPRESSION && p.isStatic // 类型为简单表达式 且 是静态的
 
 export const isBuiltInType = (tag: string, expected: string): boolean =>
   tag === expected || tag === hyphenate(expected)
 
+// 是核心内置组件
 export function isCoreComponent(tag: string): symbol | void {
   if (isBuiltInType(tag, 'Teleport')) {
     return TELEPORT
@@ -155,6 +157,7 @@ export const isMemberExpressionBrowser = (path: string): boolean => {
   return !currentOpenBracketCount && !currentOpenParensCount
 }
 
+// 是否是成员表达式节点 - 其中标识符也是
 export const isMemberExpressionNode = __BROWSER__
   ? (NOOP as any as (path: string, context: TransformContext) => boolean)
   : (path: string, context: TransformContext): boolean => {
@@ -325,16 +328,19 @@ export function isTemplateNode(
   )
 }
 
+// 主要是判断节点类型为元素 且 标签类型为插槽
 export function isSlotOutlet(
   node: RootNode | TemplateChildNode
 ): node is SlotOutletNode {
   return node.type === NodeTypes.ELEMENT && node.tagType === ElementTypes.SLOT
 }
 
+// 返回CREATE_ELEMENT_VNODE
 export function getVNodeHelper(ssr: boolean, isComponent: boolean) {
   return ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE
 }
 
+// 返回CREATE_ELEMENT_BLOCK
 export function getVNodeBlockHelper(ssr: boolean, isComponent: boolean) {
   return ssr || isComponent ? CREATE_BLOCK : CREATE_ELEMENT_BLOCK
 }
@@ -518,6 +524,8 @@ export function hasScopeRef(
   }
 }
 
+// 节点类型不是js调用表达式 且 callee不是WITH_MEMO
+// 那么就直接返回该node
 export function getMemoedVNodeCall(node: BlockCodegenNode | MemoExpression) {
   if (node.type === NodeTypes.JS_CALL_EXPRESSION && node.callee === WITH_MEMO) {
     return node.arguments[1].returns as VNodeCall
@@ -526,13 +534,16 @@ export function getMemoedVNodeCall(node: BlockCodegenNode | MemoExpression) {
   }
 }
 
+// 给节点标记为块
 export function makeBlock(
   node: VNodeCall,
   { helper, removeHelper, inSSR }: TransformContext
 ) {
   if (!node.isBlock) {
-    node.isBlock = true
+    node.isBlock = true // 给节点标记为块
+    // 删除CREATE_ELEMENT_VNODE助手名字
     removeHelper(getVNodeHelper(inSSR, node.isComponent))
+    // 添加OPEN_BLOCK、CREATE_ELEMENT_BLOCK助手名字
     helper(OPEN_BLOCK)
     helper(getVNodeBlockHelper(inSSR, node.isComponent))
   }

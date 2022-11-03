@@ -33,8 +33,11 @@ import {
 } from '@vue/shared'
 import { DOMNamespaces } from '../parserOptions'
 
+// 字符串化临界值
 export const enum StringifyThresholds {
+  // 带有binding的元素的数量
   ELEMENT_WITH_BINDING_COUNT = 5,
+  // 节点的数量
   NODE_COUNT = 20
 }
 
@@ -69,6 +72,7 @@ const expReplaceRE = /__VUE_EXP_START__(.*?)__VUE_EXP_END__/g
  *
  * This optimization is only performed in Node.js.
  */
+// 此优化仅在 Node.js 中执行。
 export const stringifyStatic: HoistTransform = (children, context, parent) => {
   // bail stringification for slot content
   if (context.scopes.vSlot > 0) {
@@ -81,27 +85,37 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
 
   const stringifyCurrentChunk = (currentIndex: number): number => {
     if (
+      // >= 20
       nc >= StringifyThresholds.NODE_COUNT ||
+      // >= 5
       ec >= StringifyThresholds.ELEMENT_WITH_BINDING_COUNT
     ) {
+      // 将所有当前符合条件的节点组合成一个静态 vnode 调用
       // combine all currently eligible nodes into a single static vnode call
       const staticCall = createCallExpression(context.helper(CREATE_STATIC), [
         JSON.stringify(
+          // 字符串化节点
           currentChunk.map(node => stringifyNode(node, context)).join('')
         ).replace(expReplaceRE, `" + $1 + "`),
+        // 第二个参数表示这个静态vnode将插入/水合物的DOM节点的数量
         // the 2nd argument indicates the number of DOM nodes this static vnode
         // will insert / hydrate
         String(currentChunk.length)
       ])
+      // 用静态 vnode 调用替换第一个节点的提升表达式
       // replace the first node's hoisted expression with the static vnode call
       replaceHoist(currentChunk[0], staticCall, context)
+      // context.hoists中搜索currentChunk[0]的下标替换为staticCall
 
       if (currentChunk.length > 1) {
+        // 对context.hoists中除了第一个之后的都置为null，这样之后就不会生成啦 ~
         for (let i = 1; i < currentChunk.length; i++) {
+          // 对于合并的节点，将它们的提升表达式设置为 null
           // for the merged nodes, set their hoisted expression to null
           replaceHoist(currentChunk[i], null, context)
         }
 
+        // 还从children中删除合并节点
         // also remove merged nodes from children
         const deleteCount = currentChunk.length - 1
         children.splice(currentIndex - currentChunk.length + 1, deleteCount)
@@ -116,10 +130,12 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
     const child = children[i]
     const hoisted = getHoistedNode(child)
     if (hoisted) {
+      // 提升的存在意味着子节点必须是可字符串化的节点
       // presence of hoisted means child must be a stringifiable node
       const node = child as StringifiableNode
       const result = analyzeNode(node)
       if (result) {
+        // 节点是可字符串化的，记录状态
         // node is stringifiable, record state
         nc += result[0]
         ec += result[1]
@@ -139,6 +155,58 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
   // in case the last node was also stringifiable
   stringifyCurrentChunk(i)
 }
+
+/* 
+
+https://sfc.vuejs.org/
+
+<script setup>
+import { ref } from 'vue'
+
+const msg = ref('Hello World!')
+</script>
+
+<template>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+  <h2>张佳宁</h2>
+</template>
+
+*/
+
+
+/* Analyzed bindings: {
+  "ref": "setup-const",
+  "msg": "setup-ref"
+} */
+// import { createElementVNode as _createElementVNode, createStaticVNode as _createStaticVNode } from "vue"
+
+// const _hoisted_1 = /*#__PURE__*/_createStaticVNode("<h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2><h2>张佳宁</h2>", 10)
+
+// import { ref } from 'vue'
+
+
+// const __sfc__ = {
+//   __name: 'App',
+//   setup(__props) {
+
+// const msg = ref('Hello World!')
+
+// return (_ctx, _cache) => {
+//   return _hoisted_1
+// }
+// }
+
+// }
+// __sfc__.__file = "App.vue"
+// export default __sfc__
 
 const getHoistedNode = (node: TemplateChildNode) =>
   ((node.type === NodeTypes.ELEMENT && node.tagType === ElementTypes.ELEMENT) ||
@@ -172,6 +240,7 @@ const isNonStringifiable = /*#__PURE__*/ makeMap(
 )
 
 /**
+ * // 对于提升的节点，对其进行分析并返回：
  * for a hoisted node, analyze it and return:
  * - false: bailed (contains non-stringifiable props or runtime constant)
  * - [nc, ec] where
@@ -187,6 +256,7 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
     return [1, 0]
   }
 
+  // 初始为1
   let nc = 1 // node count
   let ec = node.props.length > 0 ? 1 : 0 // element w/ binding count
   let bailed = false
@@ -228,7 +298,7 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
       }
     }
     for (let i = 0; i < node.children.length; i++) {
-      nc++
+      nc++ // 这里让nc++
       const child = node.children[i]
       if (child.type === NodeTypes.ELEMENT) {
         if (child.props.length > 0) {
@@ -258,7 +328,7 @@ function stringifyNode(
   }
   switch (node.type) {
     case NodeTypes.ELEMENT:
-      return stringifyElement(node, context)
+      return stringifyElement(node, context) // 字符串化元素
     case NodeTypes.TEXT:
       return escapeHtml(node.content)
     case NodeTypes.COMMENT:
@@ -268,7 +338,7 @@ function stringifyNode(
     case NodeTypes.COMPOUND_EXPRESSION:
       return escapeHtml(evaluateConstant(node))
     case NodeTypes.TEXT_CALL:
-      return stringifyNode(node.content, context)
+      return stringifyNode(node.content, context) // 字符串化节点
     default:
       // static trees will not contain if/for nodes
       return ''
@@ -355,9 +425,12 @@ function stringifyElement(
 // run JSFuck in here. But we mark it unsafe for security review purposes.
 // (see compiler-core/src/transforms/transformExpression)
 function evaluateConstant(exp: ExpressionNode): string {
+  // 当前这个表达式节点若是简单表达式类型，那么直接把它的内容作为函数体生成一个函数然后执行此函数，拿到它的结果返回
   if (exp.type === NodeTypes.SIMPLE_EXPRESSION) {
     return new Function(`return ${exp.content}`)()
   } else {
+    // 复合的
+    // 举例：count is {{count}}
     // compound
     let res = ``
     exp.children.forEach(c => {

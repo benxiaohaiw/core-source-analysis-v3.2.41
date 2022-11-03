@@ -22,25 +22,28 @@ export const enum Namespaces {
   HTML
 }
 
+// 语法树节点的类型
 export const enum NodeTypes {
-  ROOT,
-  ELEMENT,
-  TEXT,
+  ROOT, // 根节点
+  ELEMENT, // 元素节点
+  TEXT, // 文本节点
   COMMENT,
-  SIMPLE_EXPRESSION,
-  INTERPOLATION,
-  ATTRIBUTE,
-  DIRECTIVE,
+  SIMPLE_EXPRESSION, // 简单表达式节点
+  INTERPOLATION, // 插值节点
+  ATTRIBUTE, // 属性节点
+  DIRECTIVE, // 指令节点
+  // 容器
   // containers
-  COMPOUND_EXPRESSION,
-  IF,
-  IF_BRANCH,
-  FOR,
-  TEXT_CALL,
+  COMPOUND_EXPRESSION, // 混合表达式节点
+  IF, // if节点
+  IF_BRANCH, // if分支节点
+  FOR, // for节点
+  TEXT_CALL, // 文本调用节点
+  // 代码生成
   // codegen
-  VNODE_CALL,
-  JS_CALL_EXPRESSION,
-  JS_OBJECT_EXPRESSION,
+  VNODE_CALL, // 虚拟节点调用
+  JS_CALL_EXPRESSION, // js调用表达式
+  JS_OBJECT_EXPRESSION, // js对象表达式
   JS_PROPERTY,
   JS_ARRAY_EXPRESSION,
   JS_FUNCTION_EXPRESSION,
@@ -56,6 +59,7 @@ export const enum NodeTypes {
   JS_RETURN_STATEMENT
 }
 
+// 元素的类型
 export const enum ElementTypes {
   ELEMENT,
   COMPONENT,
@@ -195,16 +199,18 @@ export interface DirectiveNode extends Node {
 }
 
 /**
+ * // 静态类型有几个级别。
  * Static types have several levels.
  * Higher levels implies lower levels. e.g. a node that can be stringified
  * can always be hoisted and skipped for patch.
+ * // 更高的级别意味着更低的级别。例如，一个可以字符串化的节点总是可以被提升和跳过补丁。
  */
-export const enum ConstantTypes {
-  NOT_CONSTANT = 0,
-  CAN_SKIP_PATCH,
-  CAN_HOIST,
-  CAN_STRINGIFY
-}
+export const enum ConstantTypes { // 常量类型
+  NOT_CONSTANT = 0, // 不是常量0
+  CAN_SKIP_PATCH, // 可以跳过比对1
+  CAN_HOIST, // 可以提升2
+  CAN_STRINGIFY // 可以字符串化3
+} // 常量类型
 
 export interface SimpleExpressionNode extends Node {
   type: NodeTypes.SIMPLE_EXPRESSION
@@ -549,12 +555,13 @@ export const locStub: SourceLocation = {
   end: { line: 1, column: 1, offset: 0 }
 }
 
+// 创建root根节点
 export function createRoot(
   children: TemplateChildNode[],
   loc = locStub
 ): RootNode {
   return {
-    type: NodeTypes.ROOT,
+    type: NodeTypes.ROOT, // 节点类型为root根
     children,
     helpers: [],
     components: [],
@@ -568,6 +575,7 @@ export function createRoot(
   }
 }
 
+// 创建虚拟节点调用节点
 export function createVNodeCall(
   context: TransformContext | null,
   tag: VNodeCall['tag'],
@@ -582,11 +590,13 @@ export function createVNodeCall(
   loc = locStub
 ): VNodeCall {
   if (context) {
-    if (isBlock) {
-      context.helper(OPEN_BLOCK)
-      context.helper(getVNodeBlockHelper(context.inSSR, isComponent))
+    if (isBlock) { // 是块
+      // helper仅仅是把名字存入一个map中key为name，值为计数
+      context.helper(OPEN_BLOCK) // ---
+      context.helper(getVNodeBlockHelper(context.inSSR, isComponent)/** CREATE_ELEMENT_VNODE */)
     } else {
-      context.helper(getVNodeHelper(context.inSSR, isComponent))
+      // 不是块
+      context.helper(getVNodeHelper(context.inSSR, isComponent)/** CREATE_ELEMENT_BLOCK */)
     }
     if (directives) {
       context.helper(WITH_DIRECTIVES)
@@ -594,20 +604,21 @@ export function createVNodeCall(
   }
 
   return {
-    type: NodeTypes.VNODE_CALL,
+    type: NodeTypes.VNODE_CALL, // 节点类型为虚拟节点调用类型
     tag,
     props,
     children,
     patchFlag,
     dynamicProps,
     directives,
-    isBlock,
+    isBlock, // 是否为块
     disableTracking,
     isComponent,
     loc
   }
 }
 
+// 创建数组表达式
 export function createArrayExpression(
   elements: ArrayExpression['elements'],
   loc: SourceLocation = locStub
@@ -619,6 +630,7 @@ export function createArrayExpression(
   }
 }
 
+// 创建对象表达式
 export function createObjectExpression(
   properties: ObjectExpression['properties'],
   loc: SourceLocation = locStub
@@ -630,6 +642,7 @@ export function createObjectExpression(
   }
 }
 
+// 创建对象属性
 export function createObjectProperty(
   key: Property['key'] | string,
   value: Property['value']
@@ -637,32 +650,34 @@ export function createObjectProperty(
   return {
     type: NodeTypes.JS_PROPERTY,
     loc: locStub,
-    key: isString(key) ? createSimpleExpression(key, true) : key,
+    key: isString(key) ? createSimpleExpression(key, true/** key是字符串的话则这里传入是静态的 */) : key,
     value
   }
 }
 
+// 创建简单表达式节点
 export function createSimpleExpression(
   content: SimpleExpressionNode['content'],
-  isStatic: SimpleExpressionNode['isStatic'] = false,
+  isStatic: SimpleExpressionNode['isStatic'] = false, // 默认不是静态的
   loc: SourceLocation = locStub,
-  constType: ConstantTypes = ConstantTypes.NOT_CONSTANT
+  constType: ConstantTypes = ConstantTypes.NOT_CONSTANT // 默认是不是常量类型
 ): SimpleExpressionNode {
   return {
-    type: NodeTypes.SIMPLE_EXPRESSION,
+    type: NodeTypes.SIMPLE_EXPRESSION, // 节点类型为简单表达式
     loc,
     content,
-    isStatic,
-    constType: isStatic ? ConstantTypes.CAN_STRINGIFY : constType
+    isStatic, // 是否为静态的
+    constType: isStatic ? ConstantTypes.CAN_STRINGIFY : constType // 是静态的话则常量类型为可以字符串化
   }
 }
 
+// 创建插值节点
 export function createInterpolation(
   content: InterpolationNode['content'] | string,
   loc: SourceLocation
 ): InterpolationNode {
   return {
-    type: NodeTypes.INTERPOLATION,
+    type: NodeTypes.INTERPOLATION, // 节点类型为插值
     loc,
     content: isString(content)
       ? createSimpleExpression(content, false, loc)
@@ -670,6 +685,7 @@ export function createInterpolation(
   }
 }
 
+// 创建复合的表达式节点
 export function createCompoundExpression(
   children: CompoundExpressionNode['children'],
   loc: SourceLocation = locStub
@@ -685,19 +701,21 @@ type InferCodegenNodeType<T> = T extends typeof RENDER_SLOT
   ? RenderSlotCall
   : CallExpression
 
+// 创建调用表达式节点
 export function createCallExpression<T extends CallExpression['callee']>(
   callee: T,
   args: CallExpression['arguments'] = [],
   loc: SourceLocation = locStub
 ): InferCodegenNodeType<T> {
   return {
-    type: NodeTypes.JS_CALL_EXPRESSION,
+    type: NodeTypes.JS_CALL_EXPRESSION, // 类型为js调用表达式
     loc,
-    callee,
-    arguments: args
+    callee, // 调用者
+    arguments: args // 参数
   } as InferCodegenNodeType<T>
 }
 
+// 创建函数表达式节点
 export function createFunctionExpression(
   params: FunctionExpression['params'],
   returns: FunctionExpression['returns'] = undefined,
@@ -706,15 +724,16 @@ export function createFunctionExpression(
   loc: SourceLocation = locStub
 ): FunctionExpression {
   return {
-    type: NodeTypes.JS_FUNCTION_EXPRESSION,
-    params,
-    returns,
+    type: NodeTypes.JS_FUNCTION_EXPRESSION, // js函数表达式
+    params, // 参数
+    returns, // 返回值
     newline,
     isSlot,
     loc
   }
 }
 
+// 创建条件表达式节点
 export function createConditionalExpression(
   test: ConditionalExpression['test'],
   consequent: ConditionalExpression['consequent'],
@@ -722,15 +741,16 @@ export function createConditionalExpression(
   newline = true
 ): ConditionalExpression {
   return {
-    type: NodeTypes.JS_CONDITIONAL_EXPRESSION,
-    test,
-    consequent,
-    alternate,
+    type: NodeTypes.JS_CONDITIONAL_EXPRESSION, // 节点类型为js条件表达式类型
+    test, // 条件
+    consequent, // 结果
+    alternate, // 备用
     newline,
     loc: locStub
   }
 }
 
+// 创建缓存表达式节点
 export function createCacheExpression(
   index: number,
   value: JSChildNode,

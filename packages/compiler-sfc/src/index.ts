@@ -1,6 +1,9 @@
 // API
-export { parse } from './parse'
-export { compileTemplate } from './compileTemplate'
+export { parse } from './parse' // sfc的解析函数
+// 整体步骤
+// 1.parse（生成对应的ast语法树 -> 根据ast语法树创建对应的块信息对象）
+// 2.compile（根据每个块信息对象进行编译 -> 产生相应的code字符串）
+export { compileTemplate } from './compileTemplate' // sfc中对于template的编译 api
 export { compileStyle, compileStyleAsync } from './compileStyle'
 export { compileScript } from './compileScript'
 export { rewriteDefault } from './rewriteDefault'
