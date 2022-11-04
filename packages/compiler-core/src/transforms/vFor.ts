@@ -92,18 +92,21 @@ export const transformFor = createStructuralDirectiveTransform(
         }
       }
 
+      // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       // ++++++++++++++++++++++++++++++++++++
       const isStableFragment =
         forNode.source.type === NodeTypes.SIMPLE_EXPRESSION &&
         forNode.source.constType > ConstantTypes.NOT_CONSTANT // ConstantTypes.NOT_CONSTANT > ConstantTypes.NOT_CONSTANT
       // 不是标准fragment
+      // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       
-      // +++++++++++++++++++++++++++
-      const fragmentFlag = isStableFragment // ++++++++++++++++++++++
+      // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      const fragmentFlag = isStableFragment // 是否为标准fragment // ++++++++++++++++++++++
         ? PatchFlags.STABLE_FRAGMENT
-        : keyProp
+        : keyProp // 是否有key属性
         ? PatchFlags.KEYED_FRAGMENT // 那就是带有key的fragment // ++++++++++++++++++++++++=
-        : PatchFlags.UNKEYED_FRAGMENT
+        : PatchFlags.UNKEYED_FRAGMENT // 不带key的fragment // +++++++++++++++++++++++++++++++++++++++++++++++++
+      // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
       // ++++++++++++++++++
       // 准备codegen node为创建虚拟节点调用节点
@@ -118,12 +121,82 @@ export const transformFor = createStructuralDirectiveTransform(
         undefined,
         // ***
         // 是块
+        // 大多都是是块且不是组件且不禁用收集
+        // 但是这里唯一不一样的是是否禁用收集需要依据isStableFragment的取反值 - isStableFragment那么不禁用收集 不是isStableFragment那么禁用收集 +++++++++++++++++++++++++++++++++
         // ***
-        true /* isBlock */, // ++++++++++++++++++++++
-        !isStableFragment /* disableTracking */,
-        false /* isComponent */,
+        true /* isBlock */, // ++++++++++++++++++++++++++++++++++++++++
+        !isStableFragment /* disableTracking */, // ++++++++++++++++++++++++++++++++++++++
+        // 标记不是组件
+        // 标记不是组件
+        false /* isComponent */, // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         node.loc
       ) as ForCodegenNode
+
+      /* 
+      <script setup>
+        import { ref } from 'vue'
+
+        const nums = ref([0, 1, 2])
+      </script>
+
+      <template>
+        <ul>
+          <li v-for="(item, index) in nums" :key="item">{{ item }}</li>
+        </ul>
+        <ul>
+          <li v-for="(item, index) in [0, 1, 2]" :key="item">{{ item }}</li>
+        </ul>
+      </template>
+      */
+
+// -++++++++++++++++++++++++++++++++++++++++++++++++
+/* Analyzed bindings: {
+  "ref": "setup-const",
+  "nums": "setup-ref"
+} */
+// import { renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, toDisplayString as _toDisplayString, createElementVNode as _createElementVNode } from "vue"
+
+// import { ref } from 'vue'
+
+
+// const __sfc__ = {
+//   __name: 'App',
+//   setup(__props) {
+
+// const nums = ref([0, 1, 2])
+
+// return (_ctx, _cache) => {
+//   return (_openBlock(), _createElementBlock(_Fragment, null, [ // 注意是_createElementBlock
+//     _createElementVNode("ul", null, [
+  
+         // 注意是带有参数true的，同时也注意是_createElementBlock，孩子正好是renderList函数执行的结果 - 它两个参数，第二个参数为函数，它的返回值正是childBlock
+//       (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(nums.value, (item, index) => {
+
+           // 注意是createElementBlock - 这个是因为fragment为keyedFragment那么所以childBlock的isBlock为true啦 再者同时因为不是组件所以就是createElementBlock
+
+//         return (_openBlock(), _createElementBlock("li", { key: item }, _toDisplayString(item), 1 /* TEXT */))
+//       }), 128 /* KEYED_FRAGMENT */))
+//     ]),
+//     _createElementVNode("ul", null, [
+//       (_openBlock(), _createElementBlock(_Fragment, null, _renderList([0, 1, 2], (item, index) => {
+  
+           // 注意是createElementVNode - 这个是因为fragment为stableFragment那么所以childBlock的isBlock为false啦 再者同时因为不是组件所以就是createElementVNode
+
+//         return _createElementVNode("li", { key: item }, _toDisplayString(item), 1 /* TEXT */)
+//       }), 64 /* STABLE_FRAGMENT */))
+//     ])
+//   ], 64 /* STABLE_FRAGMENT */))
+// }
+// }
+
+// }
+// __sfc__.__file = "App.vue"
+// export default __sfc__
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
 
       // 返回退出函数
       return () => {
@@ -173,6 +246,8 @@ export const transformFor = createStructuralDirectiveTransform(
           : null
         // +++++++
 
+        // 准备childBlock // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
         if (slotOutlet) { // ++++++++++++++++++++++++++++++++++
           // <slot v-for="..."> or <template v-for="..."><slot/></template>
           childBlock = slotOutlet.codegenNode as RenderSlotCall
@@ -190,15 +265,18 @@ export const transformFor = createStructuralDirectiveTransform(
             helper(FRAGMENT),
             keyProperty ? createObjectExpression([keyProperty]) : undefined,
             node.children, // +++++++++
-            PatchFlags.STABLE_FRAGMENT +
+            PatchFlags.STABLE_FRAGMENT + // 标准fragment
               (__DEV__
                 ? ` /* ${PatchFlagNames[PatchFlags.STABLE_FRAGMENT]} */`
                 : ``),
             undefined,
             undefined,
+            // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             true, // 是块 // ++++++
-            undefined,
+            undefined, // disableTracking // 不禁用收集
+            // 标记不是组件
             false /* isComponent */
+            // +++++++++++++++++++++++++++++++++++++++++
           )
         } else {
           // 正常元素v-for
@@ -208,7 +286,7 @@ export const transformFor = createStructuralDirectiveTransform(
           childBlock = (children[0] as PlainElementNode)
             .codegenNode as VNodeCall // li对应的codegenNode++++++++++==
           if (isTemplate && keyProperty) {
-            injectProp(childBlock, keyProperty, context)
+            injectProp(childBlock, keyProperty, context) // 注入key属性 // +++++++++++++++++++++++++++++++++++++++++++++++++++++
           }
 
           // +++++++++++++++++
@@ -229,8 +307,8 @@ export const transformFor = createStructuralDirectiveTransform(
             }
           }
 
-          // ++++++++++++++++++
-          childBlock.isBlock = !isStableFragment // +++++++++++
+          // ++++++++++++++++++childBlock是否是块的直接关系就是上面的isStableFragment的取反值!isStableFragment // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+          childBlock.isBlock = !isStableFragment // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
           if (childBlock.isBlock) { // +++++++++++
             helper(OPEN_BLOCK) // +++++++++++++
             helper(getVNodeBlockHelper(context.inSSR, childBlock.isComponent))
@@ -241,10 +319,12 @@ export const transformFor = createStructuralDirectiveTransform(
         
         }
 
+        // childBlock准备完毕 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
         // https://vuejs.org/api/built-in-directives.html#v-memo
         // Usage with v-for
         // ++++++++++++++
-        if (memo) { // +++++++++++
+        if (memo) { // +++++++++++ // 是否有memo
           // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
           // 创建函数表达式节点
@@ -277,19 +357,21 @@ export const transformFor = createStructuralDirectiveTransform(
             createSimpleExpression(String(context.cached++))
           )
         } else { // +++++++++++++++++++++
+          // 没有memo // 正常的
           // ++++++++++++++++++++++++++++++++++++++++++++++++++++++
           // ++++++
           // renderList的参数推入第二个参数为一个函数
           renderExp.arguments.push(
-            createFunctionExpression( // 创建函数表达式
+            // 第二个参数
+            createFunctionExpression( // 创建函数表达式 // +++++++++++++++++
               createForLoopParams(forNode.parseResult), // 根据解析结果创建for循环参数 - 就是表达式节点组成数组 [val, idx, ___]
-              // ++++++
+              // ++++++// 返回的正是childBlock
               childBlock, // returns
               true /* force newline */
             ) as ForIteratorExpression
           )
         }
-        // +++++++++++++++++++++*****************************88
+        // +++++++++++++++++++++*****************************+++++++++++++++++++++++
       }
     })
   }

@@ -541,10 +541,10 @@ export function makeBlock(
 ) {
   if (!node.isBlock) {
     node.isBlock = true // 给节点标记为块
-    // 删除CREATE_ELEMENT_VNODE助手名字
-    removeHelper(getVNodeHelper(inSSR, node.isComponent))
-    // 添加OPEN_BLOCK、CREATE_ELEMENT_BLOCK助手名字
+    // 删除CREATE_ELEMENT_VNODE或者createVNode助手名字
+    removeHelper(getVNodeHelper(inSSR, node.isComponent)) // 要根据节点的isComponent属性
+    // 添加OPEN_BLOCK、CREATE_ELEMENT_BLOCK或者createBlock助手名字
     helper(OPEN_BLOCK)
-    helper(getVNodeBlockHelper(inSSR, node.isComponent))
+    helper(getVNodeBlockHelper(inSSR, node.isComponent)) // 要根据节点的isComponent属性
   }
 }

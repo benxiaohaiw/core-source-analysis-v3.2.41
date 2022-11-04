@@ -806,6 +806,7 @@ function genComment(node: CommentNode, context: CodegenContext) {
   push(`${helper(CREATE_COMMENT)}(${JSON.stringify(node.content)})`, node)
 }
 
+// 生成vnode调用
 function genVNodeCall(node: VNodeCall, context: CodegenContext) {
   const { push, helper, pure } = context
   const {
@@ -816,38 +817,72 @@ function genVNodeCall(node: VNodeCall, context: CodegenContext) {
     dynamicProps,
     directives,
     isBlock,
-    disableTracking,
-    isComponent
+    disableTracking, // ++++++++++++++++++++++++++++
+    isComponent // +++++++++++++++++
   } = node
   if (directives) { // 是否有指令 - withDirectives
     push(helper(WITH_DIRECTIVES) + `(`)
   }
+
   // 是否为块 - openBlock
   if (isBlock) {
-    push(`(${helper(OPEN_BLOCK)}(${disableTracking ? `true` : ``}), `)
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // ++++++++++++++++++++++++++++++++++
+    push(`(${helper(OPEN_BLOCK)}(${disableTracking ? `true` : ``}), `) // vnode调用节点的disableTracking决定是否产出参数true还是没有 // ++++++++++++++++++++
+    // true代表禁用收集，false代表收集
+    // 这个参数会影响openBlock函数内的执行逻辑以及createBaseVNode和setupBlock中的运行时逻辑的
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   }
+
   // pure注解
   if (pure) {
     push(PURE_ANNOTATION)
   }
+
+  // ++++++++++++++++++++++++++++++++++++++++
+  // vnode的调用表达式节点中isComponent属性仅仅是用来确定到底是哪一个createXxx运行时函数的
+  // 它并没有其它的用处，就是这样！
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  /* 
+  isComponent和isBlock来去确定是到底是哪一个产生vnode的createXxx运行时函数的
+  isComponent: true isBlock: true -> createBlock
+  isComponent: true isBlock: false -> createVNode
+  isComponent: false isBlock: true -> createElementBlock
+  isComponent: false isBlock: false -> createElementVNode
+  */
+
   // 调用助手
-  // +++
+  // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   const callHelper: symbol = isBlock
     ? getVNodeBlockHelper(context.inSSR, isComponent) // ssr || isComponent ? CREATE_BLOCK : CREATE_ELEMENT_BLOCK
     : getVNodeHelper(context.inSSR, isComponent) // ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE
-  // +++
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   
-  // +++
+  // +++++++++++++++++++++++++++++++++++
   // 块的带block - 不带块的Vnode
   // createBlock createVnode
   // createElemnetBlock craeteElementVnode
-  // +++
+  // ++++++++++++++++++++++++++++++++++++++++++++++
+
+
+  // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  /* 
+  isBlock - 决定是否openBlock、确定是哪一个createXxx运行时函数
+  disableTracking - 决定openBlock函数的参数是true还是不传
+  isComponent - 决定是哪一个createXxx运行时函数
+
+  不管是哪一个createXxx运行时函数，最终生成的vnode调用表达式字符串中传入的参数都是tag, props, children, patchFlag, dynamicProps - 可以在codegen.ts中的genVNodeCall中去查看
+  */
+  // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
   
   push(helper(callHelper) + `(`, node)
   // 生成节点列表
   genNodeList(
     // 生成可null的参数 - 意思没有使用null
-    genNullableArgs([tag, props, children, patchFlag, dynamicProps]), // 标签、属性、孩子、比对标记、动态属性名
+    genNullableArgs([tag, props, children, patchFlag, dynamicProps]), // 标签、属性、孩子、比对标记、动态属性名 // ++++++++++++++++++++++
+    // 生成创建vnode的运行时createXxx函数的参数，分别是tag, props, children, patchFlag, dynamicProps // +++++++++++++++++++++++++++++++++++++++++++++++++++++++
     context
   )
   push(`)`) // )

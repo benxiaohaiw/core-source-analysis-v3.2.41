@@ -181,7 +181,7 @@ OPEN_BLOCK
   v-for
     open fragment
       // ++++++++++++++++++
-      fragment的孩子就是renderList函数执行的结果 - 而renderList函数传入的函数它所返回的孩子是否open具体情况还需要在vFor.ts中退出函数中查看具体对应的逻辑
+      fragment的孩子就是renderList函数执行的结果 - 而renderList函数传入的函数它所返回的孩子是否open具体情况还需要在+++ vFor.ts +++中退出函数中查看具体对应的逻辑
       childBlock is block还需看具体看退出函数中所写的逻辑 这里不太好说 所以具体可以详细了解 ~
       // +++++++++++
   v-if
@@ -194,3 +194,11 @@ OPEN_BLOCK
   <keep-alive>xxx</keep-alive>
     open
 */
+
+// 参数是在codegen.ts中的genVNodeCall函数中根据vnode调用表达式节点的disableTracking为true生成字符串true，false不生成任何东西
+// openBlock() // 该函数是有参数的 -> disableTracking
+// false是不禁用收集
+// true是禁用收集
+// 它会影响运行时createBaseVNode函数内收集vnode到块树的逻辑以及setupBlock函数内的逻辑
+
+// openBlock的作用 - 在runtime-core/src/vnode.ts中具体查看

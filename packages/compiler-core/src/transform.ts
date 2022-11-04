@@ -373,7 +373,7 @@ function createRootCodegen(root: RootNode, context: TransformContext) {
       // SimpleExpressionNode
       const codegenNode = child.codegenNode
       if (codegenNode.type === NodeTypes.VNODE_CALL) {
-        makeBlock(codegenNode, context) // 标记块
+        makeBlock(codegenNode, context) // 标记块 // ++++++++++++++++++++++++++++++++
       }
       // 挂载到root上
       root.codegenNode = codegenNode
@@ -389,7 +389,7 @@ function createRootCodegen(root: RootNode, context: TransformContext) {
   } else if (children.length > 1) {
     // root 有多个节点 - 返回一个fragment块。
     // root has multiple nodes - return a fragment block.
-    let patchFlag = PatchFlags.STABLE_FRAGMENT
+    let patchFlag = PatchFlags.STABLE_FRAGMENT // 标准组件 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++
     let patchFlagText = PatchFlagNames[PatchFlags.STABLE_FRAGMENT] // [64] -> STABLE_FRAGMENT
     // 检查fragment是否实际上包含一个有效的孩子，其余的都是注释
     // check if the fragment actually contains a single valid child with
@@ -407,12 +407,14 @@ function createRootCodegen(root: RootNode, context: TransformContext) {
       helper(FRAGMENT),
       undefined,
       root.children,
-      patchFlag + (__DEV__ ? ` /* ${patchFlagText} */` : ``), // 64 /* STABLE_FRAGMENT */
+      patchFlag + (__DEV__ ? ` /* ${patchFlagText} */` : ``), // 64 /* STABLE_FRAGMENT */ // ++++++++++++++++++
       undefined,
       undefined,
+      // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       true, // 标记为是块
-      undefined,
+      undefined, // disableTracking
       false /* isComponent */
+      // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     )
   } else {
     //没有孩子 = noop

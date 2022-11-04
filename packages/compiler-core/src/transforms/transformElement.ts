@@ -295,9 +295,19 @@ export const transformElement: NodeTransform = (node, context) => {
       vnodePatchFlag,
       vnodeDynamicProps,
       vnodeDirectives,
-      !!shouldUseBlock, // 是否block - 依据shouldUseBlock
-      false /* disableTracking */,
-      isComponent,
+      // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      /* 
+      isBlock - 决定是否openBlock、确定是哪一个createXxx运行时函数
+      disableTracking - 决定openBlock函数的参数是true还是不传
+      isComponent - 决定是哪一个createXxx运行时函数
+
+      不管是哪一个createXxx运行时函数，最终生成的vnode调用表达式字符串中传入的参数都是tag, props, children, patchFlag, dynamicProps - 可以在codegen.ts中的genVNodeCall中去查看
+      */
+      // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      !!shouldUseBlock, // 是否block - 依据shouldUseBlock // ++++++++++++++++++++++++++++
+      false /* disableTracking */, // ++++++++++++++++++++++++++++++++++++++++
+      isComponent, // +++++++++++++++++++++++++++++++++++++++++++
+      // +++++++++++++++++++++++++++++++++++++
       node.loc
     )
   }

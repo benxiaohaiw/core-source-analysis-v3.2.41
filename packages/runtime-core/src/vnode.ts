@@ -224,8 +224,10 @@ export interface VNode<
 // can divide a template into nested blocks, and within each block the node
 // structure would be stable. This allows us to skip most children diffing
 // and only worry about the dynamic nodes (indicated by patch flags).
-export const blockStack: (VNode[] | null)[] = []
-export let currentBlock: VNode[] | null = null
+// ++++++++++++块栈
+export const blockStack: (VNode[] | null)[] = [] // ++++++++++++++++++++++++++++++++
+// 当前块++++++++++++++++++
+export let currentBlock: VNode[] | null = null // +++++++++++++++++
 
 /**
  * Open a block.
@@ -243,20 +245,23 @@ export let currentBlock: VNode[] | null = null
  *
  * @private
  */
-export function openBlock(disableTracking = false) {
-  blockStack.push((currentBlock = disableTracking ? null : []))
+// +++
+export function openBlock(disableTracking = false) { // ++++++++++++++++++++++
+  blockStack.push((currentBlock = disableTracking ? null : [])) // +++++++++++++++++++++++++++++++++++++++++++++
 }
 
+// +++++++++++++++++++++++++++++++++++++++++
 export function closeBlock() {
-  blockStack.pop()
-  currentBlock = blockStack[blockStack.length - 1] || null
+  blockStack.pop() // +++++++++++++++++++++++++++++++++++
+  currentBlock = blockStack[blockStack.length - 1] || null // ++++++++++++++++++++++++++++++++++
 }
 
 // Whether we should be tracking dynamic child nodes inside a block.
 // Only tracks when this value is > 0
 // We are not using a simple boolean because this value may need to be
 // incremented/decremented by nested usage of v-once (see below)
-export let isBlockTreeEnabled = 1
+// +++
+export let isBlockTreeEnabled = 1 // ++++++++++++++++++++++++++++++++++++++
 
 /**
  * Block tracking sometimes needs to be disabled, for example during the
@@ -274,20 +279,65 @@ export let isBlockTreeEnabled = 1
  *
  * @private
  */
+// ++++++
 export function setBlockTracking(value: number) {
-  isBlockTreeEnabled += value
+  isBlockTreeEnabled += value // +++++++++++++++++++++++=
 }
 
+// ++++++++++++++++++++++++++++++++++
+/* 
+createBlock
+createElementBlock
+以上俩函数相比较下面函数都会多一个步骤 -> setupBlock（（给vnode安装块到其属性dynamicChildren上）它主要是把收集到的动态孩子currentBlock赋值到vnode的dynamicChildren属性上）
+其实就是当前虚拟节点是否是块节点、是否需要禁用收集、是否是组件还是元素来去确定是哪一个运行时create函数的
+createBaseVNode
+  // 为块树收集vnode
+  // track vnode for block tree
+  if (
+    // 块树是否开启
+    isBlockTreeEnabled > 0 &&
+    // 避免块节点收集自身
+    // avoid a block node from tracking itself
+    !isBlockNode &&
+    // 是否有当前父块
+    // has current parent block
+    currentBlock &&
+    // presence of a patch flag indicates this node needs patching on updates.
+    // component nodes also should always be patched, because even if the
+    // component doesn't need to update, it needs to persist the instance on to
+    // the next vnode so that it can be properly unmounted later.
+    // vnode的patchFlag是否大于0（这个就代表vnode是否有要更新的，更新的变化的才会收集）或者vnode的shapeFlag形状标记是组件
+    (vnode.patchFlag > 0 || shapeFlag & ShapeFlags.COMPONENT) &&
+    // the EVENTS flag is only for hydration and if it is the only flag, the
+    // vnode should not be considered dynamic due to handler caching.
+    vnode.patchFlag !== PatchFlags.HYDRATE_EVENTS // vnode的比对标记不是HYDRATE_EVENTS（混合事件比对标记）
+  ) {
+    // 当前块数组中推入这个vnode
+    currentBlock.push(vnode)
+  }
+
+createVNode
+createElementVNode
+*/
+// +++++++++++++++++++++++++++++++++=
+
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++逻辑很重要
 function setupBlock(vnode: VNode) {
+  // 将当前块孩子保存在块 vnode 上
   // save current block children on the block vnode
-  vnode.dynamicChildren =
-    isBlockTreeEnabled > 0 ? currentBlock || (EMPTY_ARR as any) : null
+  // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  vnode.dynamicChildren = // +++
+    isBlockTreeEnabled > 0 ? currentBlock || (EMPTY_ARR as any) : null // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  // 结束块++++++++++++++++++++++++++++
+  // ++++++++++++++++
   // close block
-  closeBlock()
+  closeBlock() // ++++++++++++++++++++++++++++++++++++++++++++++
+  // ++++++++++++++
+  // 一个块总是要被比对的，所以把它作为它的父块的一个孩子收集它（其实就是把当前这个vnode收集到父块（上一个块）中）+++++++++++++++++++++++++++++
   // a block is always going to be patched, so track it as a child of its
   // parent block
-  if (isBlockTreeEnabled > 0 && currentBlock) {
-    currentBlock.push(vnode)
+  if (isBlockTreeEnabled > 0 && currentBlock) { // +++
+    currentBlock.push(vnode) // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   }
   return vnode
 }
@@ -295,7 +345,7 @@ function setupBlock(vnode: VNode) {
 /**
  * @private
  */
-export function createElementBlock(
+export function createElementBlock( // ++++++
   type: string | typeof Fragment,
   props?: Record<string, any> | null,
   children?: any,
@@ -303,7 +353,7 @@ export function createElementBlock(
   dynamicProps?: string[],
   shapeFlag?: number
 ) {
-  return setupBlock(
+  return setupBlock( // ++++++
     createBaseVNode(
       type,
       props,
@@ -311,7 +361,7 @@ export function createElementBlock(
       patchFlag,
       dynamicProps,
       shapeFlag,
-      true /* isBlock */
+      true /* isBlock */ // +++++++++++++++++
     )
   )
 }
@@ -323,21 +373,21 @@ export function createElementBlock(
  *
  * @private
  */
-export function createBlock(
+export function createBlock( // +++
   type: VNodeTypes | ClassComponent,
   props?: Record<string, any> | null,
   children?: any,
   patchFlag?: number,
   dynamicProps?: string[]
 ): VNode {
-  return setupBlock(
+  return setupBlock( // +++
     createVNode(
       type,
       props,
       children,
       patchFlag,
       dynamicProps,
-      true /* isBlock: prevent a block from tracking itself */
+      true /* isBlock: prevent a block from tracking itself */ // ++++++++++++++++
     )
   )
 }
@@ -346,16 +396,20 @@ export function isVNode(value: any): value is VNode {
   return value ? value.__v_isVNode === true : false
 }
 
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// 是否为相同的vnode类型
 export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
   if (
     __DEV__ &&
     n2.shapeFlag & ShapeFlags.COMPONENT &&
     hmrDirtyComponents.has(n2.type as ConcreteComponent)
   ) {
+    // 仅 HMR：如果组件已被热更新，则强制重新加载。
     // HMR only: if the component has been hot-updated, force a reload.
     return false
   }
-  return n1.type === n2.type && n1.key === n2.key
+  // 通过判断两个虚拟节点的类型以及它们的key是否都是相同的才去映射到两者是否是相同vnode类型
+  return n1.type === n2.type && n1.key === n2.key // ++++++++++++++++++++++++++
 }
 
 let vnodeArgsTransformer:
@@ -375,13 +429,14 @@ export function transformVNodeArgs(transformer?: typeof vnodeArgsTransformer) {
   vnodeArgsTransformer = transformer
 }
 
+// +++
 const createVNodeWithArgsTransform = (
   ...args: Parameters<typeof _createVNode>
 ): VNode => {
-  return _createVNode(
+  return _createVNode( // +++++++++++++++++++++++++
     ...(vnodeArgsTransformer
       ? vnodeArgsTransformer(args, currentRenderingInstance)
-      : args)
+      : args) // +++++++++++++++++++++++
   )
 }
 
@@ -404,14 +459,16 @@ const normalizeRef = ({
   ) as any
 }
 
+// +++
 function createBaseVNode(
   type: VNodeTypes | ClassComponent | typeof NULL_DYNAMIC_COMPONENT,
   props: (Data & VNodeProps) | null = null,
   children: unknown = null,
   patchFlag = 0,
   dynamicProps: string[] | null = null,
-  shapeFlag = type === Fragment ? 0 : ShapeFlags.ELEMENT,
-  isBlockNode = false,
+  shapeFlag = type === Fragment ? 0 : ShapeFlags.ELEMENT, // +++
+  // +++
+  isBlockNode = false, // +++
   needFullChildrenNormalization = false
 ) {
   const vnode = {
@@ -461,6 +518,7 @@ function createBaseVNode(
     warn(`VNode created with invalid key (NaN). VNode type:`, vnode.type)
   }
 
+  // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   // track vnode for block tree
   if (
     isBlockTreeEnabled > 0 &&
@@ -479,6 +537,7 @@ function createBaseVNode(
   ) {
     currentBlock.push(vnode)
   }
+  // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
   if (__COMPAT__) {
     convertLegacyVModelProps(vnode)
@@ -488,12 +547,14 @@ function createBaseVNode(
   return vnode
 }
 
-export { createBaseVNode as createElementVNode }
+export { createBaseVNode as createElementVNode } // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++==
 
+// ++++++
 export const createVNode = (
   __DEV__ ? createVNodeWithArgsTransform : _createVNode
 ) as typeof _createVNode
 
+// +++++++++++++++++++++++++++
 function _createVNode(
   type: VNodeTypes | ClassComponent | typeof NULL_DYNAMIC_COMPONENT,
   props: (Data & VNodeProps) | null = null,
@@ -581,14 +642,15 @@ function _createVNode(
     )
   }
 
-  return createBaseVNode(
+  // ++++++
+  return createBaseVNode( // ++++++++++++++++++++++++++++++++==
     type,
     props,
     children,
     patchFlag,
     dynamicProps,
     shapeFlag,
-    isBlockNode,
+    isBlockNode, // ++++++++++++++++++++++++++
     true
   )
 }
