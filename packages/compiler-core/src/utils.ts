@@ -47,7 +47,7 @@ import { PropsExpression } from './transforms/transformElement'
 import { parseExpression } from '@babel/parser'
 import { Expression } from '@babel/types'
 
-// 是静态表达式
+// 是否为静态表达式
 export const isStaticExp = (p: JSChildNode): p is SimpleExpressionNode =>
   p.type === NodeTypes.SIMPLE_EXPRESSION && p.isStatic // 类型为简单表达式 且 是静态的
 
@@ -320,10 +320,12 @@ export function isVSlot(p: ElementNode['props'][0]): p is DirectiveNode {
   return p.type === NodeTypes.DIRECTIVE && p.name === 'slot'
 }
 
+// 是否为template节点
 export function isTemplateNode(
   node: RootNode | TemplateChildNode
 ): node is TemplateNode {
   return (
+    // 就是查看它的tag为元素且它的tagType是template // +++
     node.type === NodeTypes.ELEMENT && node.tagType === ElementTypes.TEMPLATE
   )
 }

@@ -101,13 +101,13 @@ export function baseCompile(
   节点
   [
     once
-    if
+    if // +++
     memo
-    for
+    for // +++
     trackVForSlotScopes
     transformExpression
     transformSlotOutlet
-    transformElement
+    transformElement // +++
     trackSlotScopes
     transformText
     transformStyle

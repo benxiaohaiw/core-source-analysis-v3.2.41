@@ -122,12 +122,14 @@ export type SlotFnBuilder = (
   loc: SourceLocation
 ) => FunctionExpression
 
-// 构建客户端插槽函数
+// 构建客户端插槽函数 // +++
 const buildClientSlotFn: SlotFnBuilder = (props, children, loc) =>
   createFunctionExpression( // 创建函数表达式
     props, // 参数为props
-    children, // returns为children
+    // +++
+    children, // returns为children // ++++++
     false /* newline */,
+    // 是否为插槽 // +++
     true /* isSlot */, // +++标记是插槽+++这样就能在生成函数表达式时额外添加_withCtx()包裹所要生成的函数表达式啦 ~
     children.length ? children[0].loc : loc
   )
@@ -140,7 +142,7 @@ const buildClientSlotFn: SlotFnBuilder = (props, children, loc) =>
 export function buildSlots(
   node: ElementNode,
   context: TransformContext,
-  buildSlotFn: SlotFnBuilder = buildClientSlotFn // 默认是构建客户端插槽函数
+  buildSlotFn: SlotFnBuilder = buildClientSlotFn // 默认是构建客户端插槽函数 // +++
 ): {
   slots: SlotsExpression
   hasDynamicSlots: boolean
@@ -230,6 +232,7 @@ export function buildSlots(
 
     hasTemplateSlots = true // 标记有模板插槽
     const { children: slotChildren, loc: slotLoc } = slotElement
+    // 上方逻辑已经判断过当前的slotElement是一个template节点 - 那么这里直接取出该节点的children作为slotChildren
 
     /* 
     <Foo>
@@ -240,7 +243,7 @@ export function buildSlots(
     */
 
     const {
-      arg: slotName = createSimpleExpression(`default`, true), // 没有参数那就创建default简单表达式
+      arg: slotName = createSimpleExpression(`default`, true), // 没有参数那就创建default简单表达式 - 这个true表示isStatic
       exp: slotProps,
       loc: dirLoc
     } = slotDir
@@ -248,14 +251,44 @@ export function buildSlots(
     // 检查name是否为动态的
     // check if name is dynamic.
     let staticSlotName: string | undefined
-    if (isStaticExp(slotName)) { // 是否为静态的
+    if (isStaticExp(slotName)) { // 是否为静态的表达式
+      // 其type为SIMPLE_EXPRESSION 且 其isStatic为true
+
       staticSlotName = slotName ? slotName.content : `default` // 没有则为default
     } else {
       hasDynamicSlots = true // 有动态插槽
     }
 
     // 构建插槽函数
-    const slotFunction = buildSlotFn(slotProps, slotChildren, slotLoc) // 一个返回vnode的函数
+    const slotFunction = buildSlotFn(slotProps, slotChildren, slotLoc) // 一个返回vnode的函数 - buildSlotFn上方的参数或者默认值buildClientSlotFn
+    // 构建插槽函数
+    /* 
+    比如：<template #header="xxx">123</template>
+    function (xxx) { return  }
+
+    // 这里使用的children依然是slotChildren也就是template的children，也是略过template节点的啦 ~
+
+    // #223
+    // ++++++
+    // 如果
+    <template #header="xxx">
+      <h2>张佳宁</h2>
+      <h2>刘诗诗</h2>
+    </template>
+
+    {
+      header: _withCtx((xxx) => [..., ...])
+    }
+    genFunctionExpression -> genNodeListAsArray中可以看到这里的children是数组的话那么所返回的就直接是一个数组
+    // 而这里是不存在什么又包裹一层fragment的 - 所以这里需要进行注意的！！！
+
+    // packages/compiler-core/src/transforms/transformSlotOutlet.ts
+    // 而在插槽的出口也就是<slot name="header"/>对应的运行时函数renderSlot(_ctx.$slots, 'header')执行时
+    // 内部会先openBlock()之后再createBlock(Fragment, ..., )它的children参数就是这里的函数执行后所返回的结果数组 // +++
+    // 所以你可以说这里在插槽出口处是会使用fragment进行包裹的 // 要注意！！！
+
+    // ++++++
+    */
 
     // 检查这个插槽是否是有条件的（v-if/v-for）
     // check if this slot is conditional (v-if/v-for)
@@ -373,6 +406,15 @@ export function buildSlots(
       }
       // 插槽属性
       slotsProperties.push(createObjectProperty(slotName, slotFunction)) // 创建对象属性
+      // slotName是一个简单表达式 但是其有一个属性为isStatic表示是否为静态的 // +++
+      // 那么在genObjectExpression -> genExpressionAsPropertyKey生成的对象的key是{ [xxx]: function (xxx) {} }这样的，要注意！！！
+
+      /* 
+      比如：
+      {
+        header: function (xxx) { return  }
+      }
+      */
     }
   }
 
@@ -465,7 +507,7 @@ export function buildSlots(
     
     // ++++++
     // +++
-    slots, // +++#[xxx]这种也是属于slots（slotsProperties）里面的+++（要注意），但是它会标记hasDynamicSlots为true
+    slots, // +++#[xxx]这种也是属于slots（slotsProperties）里面的+++（要注意）其实最终就是{ [xxx]: function (xxx) {} }这种表示，但是它会标记hasDynamicSlots为true
     // 此外而对于具有if系列、for这样的则是属于dynamicSlots，它也会标记hasDynamicSlots为true
     // +++
     // ++++++

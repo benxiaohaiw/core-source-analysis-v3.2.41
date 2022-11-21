@@ -205,6 +205,7 @@ export const transformFor = createStructuralDirectiveTransform(
         let childBlock: BlockCodegenNode
         const { children } = forNode // 拿到forNode对应的原先节点
         // ++++++
+        // processFor函数中
         // children: isTemplateNode(node) ? node.children : [node]
         // ++++++++++++++++++++++++++++++++
 
@@ -258,14 +259,19 @@ export const transformFor = createStructuralDirectiveTransform(
             injectProp(childBlock, keyProperty, context) // 注入key属性
           }
         } else if (needFragmentWrapper) { // +++++++++++++++++++++++++++++++++=
-          // <template v-for="..."> with text or multi-elements
+          // <template v-for="..."> with text or multi-elements // +++
           // should generate a fragment block for each loop
+          // +++
+          // openBlock(), createElementBlock(...)
+          // +++
+          // 那么下面的renderList的第二个参数函数的返回值就是这个(openBlock(), createElementBlock(...))
           childBlock = createVNodeCall(
             context,
             helper(FRAGMENT),
-            keyProperty ? createObjectExpression([keyProperty]) : undefined,
+            keyProperty ? createObjectExpression([keyProperty]) : undefined, // key属性
+            // ++++++ 也是直接为template节点的孩子 // +++
             node.children, // +++++++++
-            PatchFlags.STABLE_FRAGMENT + // 标准fragment
+            PatchFlags.STABLE_FRAGMENT + // 标准fragment // +++
               (__DEV__
                 ? ` /* ${PatchFlagNames[PatchFlags.STABLE_FRAGMENT]} */`
                 : ``),
@@ -360,7 +366,7 @@ export const transformFor = createStructuralDirectiveTransform(
           // 没有memo // 正常的
           // ++++++++++++++++++++++++++++++++++++++++++++++++++++++
           // ++++++
-          // renderList的参数推入第二个参数为一个函数
+          // renderList的参数推入第二个参数为一个函数，这个函数返回的正是这个childBlock
           renderExp.arguments.push(
             // 第二个参数
             createFunctionExpression( // 创建函数表达式 // +++++++++++++++++
@@ -422,6 +428,7 @@ export function processFor(
     objectIndexAlias: index,
     parseResult,
     // +++++++++++++++++++++++++++++++++
+    // 是为template节点且带有v-for指令的那么这里的children直接是它的children
     children: isTemplateNode(node) ? node.children : [node] // ++++++++++++
   }
 

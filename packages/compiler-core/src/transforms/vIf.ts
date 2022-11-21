@@ -70,6 +70,7 @@ export const transformIf = createStructuralDirectiveTransform(
 
         if (isRoot) {
           // ifNode相当于是一个有关的根节点
+          // 产生codegenNode // +++
           ifNode.codegenNode = createCodegenNodeForBranch( // 为if分支类型节点创建codegenNode
             branch,
             key,
@@ -270,17 +271,19 @@ export function processIf(
 // 创建if分支类型节点
 function createIfBranch(node: ElementNode, dir: DirectiveNode): IfBranchNode {
   // 是在<template>上的v-if
-  const isTemplateIf = node.tagType === ElementTypes.TEMPLATE
+  const isTemplateIf = node.tagType === ElementTypes.TEMPLATE // 节点的标签类型是否为template，如果是且有if系列指令那么就说明是template上的if // +++
   return {
     type: NodeTypes.IF_BRANCH, // if分支节点类型
     loc: node.loc,
     // 条件
     condition: dir.name === 'else' ? undefined : dir.exp,
     // 孩子
+    // 它的孩子取决于这个条件isTemplateIf && !findDir(node, 'for')，条件成立则直接使用它的children，不成立则使用该node节点本身 // +++
     children: isTemplateIf && !findDir(node, 'for') ? node.children : [node], // 是模板if且节点没有for指令则直接节点的孩子否则直接[node]
     // 查找当前节点是否有key属性
     userKey: findProp(node, `key`),
     isTemplateIf // 是模板上的if
+    // 是否为template上的if // +++
   }
 }
 
@@ -299,7 +302,7 @@ function createCodegenNodeForBranch(
       createChildrenCodegenNode(branch, keyIndex, context), // 条件成功的结果
       // make sure to pass in asBlock: true so that the comment node call
       // closes the current block.
-      // 备用结果是一个注释
+      // 备用结果是一个注释 - createComment运行时 // +++
       createCallExpression(context.helper(CREATE_COMMENT), [ // 创建注释 - 作为条件失败的备用结果
         __DEV__ ? '"v-if"' : '""',
         'true'
@@ -339,6 +342,17 @@ function createChildrenCodegenNode(
   // 是否需要fragment包裹
   const needFragmentWrapper =
     children.length !== 1 || firstChild.type !== NodeTypes.ELEMENT // 孩子长度不为1 或 第一个孩子节点类型不是元素节点类型
+
+  /* 
+  <template v-if="xxx">
+    <h2>111</h2>
+    <h3>222</h3>
+  </template>
+  则需要fragment进行包裹
+  那么他在createIfBranch函数中的children就是template节点的children，所以这里的fragment的创建vnode函数调用表达式的children就是template节点的children
+  // 这个fragment是块，不是组件，且不禁用收集同时是一个标准fragment，那么所以最终就是openBlock(), createElementBlock(...)
+  // 所以就是说直接在产生vnode时没有template的vnode
+  */
   if (needFragmentWrapper) {
     if (children.length === 1 && firstChild.type === NodeTypes.FOR) { // vFor.ts中会去替换节点的
       // 当 child 是 ForNode 时优化嵌套fragments
@@ -364,8 +378,8 @@ function createChildrenCodegenNode(
       return createVNodeCall(
         context,
         helper(FRAGMENT),
-        createObjectExpression([keyProperty]),
-        children,
+        createObjectExpression([keyProperty]), // 属性有一个key属性
+        children, // children
         patchFlag + (__DEV__ ? ` /* ${patchFlagText} */` : ``), // 标准fragment
         undefined,
         undefined,

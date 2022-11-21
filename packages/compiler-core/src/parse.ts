@@ -560,9 +560,11 @@ const enum TagType {
   End
 }
 
-const isSpecialTemplateDirective = /*#__PURE__*/ makeMap(
-  `if,else,else-if,for,slot`
+// 是否为特别的template指令
+const isSpecialTemplateDirective = /*#__PURE__*/ makeMap( // 做一个map
+  `if,else,else-if,for,slot` // +++
 )
+// +++
 
 /**
  * Parse a tag (E.g. `<div id=a>`) with that type (start tag or end tag).
@@ -689,30 +691,59 @@ function parseTag(
   }
 
   // 准备标签类型默认是元素
-  let tagType = ElementTypes.ELEMENT
-  // 准备
+  let tagType = ElementTypes.ELEMENT // 默认是元素标签类型
+  // 当前不在v-pre中
   if (!context.inVPre) {
+    // 标签是slot
     if (tag === 'slot') {
+      // 插槽标签类型
       tagType = ElementTypes.SLOT // 插槽标签类型
-    } else if (tag === 'template') {
+    } else if (tag === 'template') { // 标签是template
       if (
         props.some(
           p =>
-            p.type === NodeTypes.DIRECTIVE && isSpecialTemplateDirective(p.name)
+            p.type === NodeTypes.DIRECTIVE && isSpecialTemplateDirective(p.name) // 所谓的【特别template指令】指的就是这些if,else,else-if,for,slot
         )
+        // ++++++
+        // 有前提必须是有属性且属性是指令且指令必须是特别的template指令才可以把标签类型变为template标签类型
+        // 否则尽管tag为template但是它的标签类型也是元素标签类型
+        // ++++++
       ) {
+        // template标签类型
         tagType = ElementTypes.TEMPLATE // template标签类型
       }
-    } else if (isComponent(tag, props, context)) {
+    } else if (isComponent(tag, props, context)) { // 标签是组件标签
+      // 组件标签类型
       tagType = ElementTypes.COMPONENT // 组件标签类型
     }
   }
 
+  // +++
+  // 如果tag为template，但是其身上没有这些特别的template指令的话，那么它的tagType就是元素element
+  // 否则的话它的tagType就是template啦 ~
+
+  // 那么这样的话直接写一个<template></template>的话直接映射到真实dom中就是template dom元素了
+  // 在html元素中是有这个template元素标签的
+  // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template
+  // The <template> HTML element is a mechanism for holding HTML that is not to be rendered immediately when a page is loaded but may be instantiated subsequently during runtime using JavaScript.
+  // <template> HTML 元素是一种用于保存 HTML 的机制，该 HTML 不会在页面加载时立即呈现，但可以在运行时使用 JavaScript 随后实例化。
+
+  // 那如果其身上有特别的template指令（if,else,else-if,for,slot），那么它的tagType就是template了 - 而它在vIf.ts、vFor.ts、transformElement.ts -> vSlot.ts中是有用
+  // 的 - 我们会发现它使用了这些特殊的template指令之后在transform阶段的codegenNode中并不会出现这个template节点，而是直接略过它使用它的children啦
+  // 所以最终生成的代码中关于render函数中【并不会出现有关于template的vnode的创建表达式】 - 而是直接略过然后对其children使用创建vnode调用表达式啦 ~ 要注意！！！
+
+  // https://vuejs.org/guide/essentials/conditional.html#v-if-on-template
+  // https://vuejs.org/guide/essentials/list.html#v-for-on-template
+  // https://vuejs.org/api/ -> Search 按钮 -> 输入框内容: template就可以进行搜索啦 ~
+  // +++
+
   return {
+    // 元素类型
     type: NodeTypes.ELEMENT, // 节点类型为元素
     ns,
     tag,
-    tagType, // 标签类型
+    // 标签类型
+    tagType, // 标签类型 // +++
     props,
     isSelfClosing,
     children: [],

@@ -603,6 +603,7 @@ function isText(n: string | CodegenNode) {
   )
 }
 
+// +++
 function genNodeListAsArray(
   nodes: (string | CodegenNode | TemplateChildNode[])[],
   context: CodegenContext
@@ -610,13 +611,20 @@ function genNodeListAsArray(
   const multilines =
     nodes.length > 3 ||
     ((!__BROWSER__ || __DEV__) && nodes.some(n => isArray(n) || !isText(n)))
-  context.push(`[`)
+  
+  // +++
+  context.push(`[`) // ++++++
   multilines && context.indent()
-  genNodeList(nodes, context, multilines)
+
+  // +++
+  genNodeList(nodes, context, multilines) // +++
   multilines && context.deindent()
-  context.push(`]`)
+
+  // +++
+  context.push(`]`) // ++++++
 }
 
+// +++
 function genNodeList(
   nodes: (string | symbol | CodegenNode | TemplateChildNode[])[],
   context: CodegenContext,
@@ -644,7 +652,7 @@ function genNodeList(
   }
 }
 
-// 生成节点
+// 生成节点 // +++
 function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   if (isString(node)) {
     context.push(node) // 字符串直接推入
@@ -778,6 +786,7 @@ function genCompoundExpression(
   }
 }
 
+// +++
 function genExpressionAsPropertyKey(
   node: ExpressionNode,
   context: CodegenContext
@@ -794,7 +803,8 @@ function genExpressionAsPropertyKey(
       : JSON.stringify(node.content)
     push(text, node)
   } else {
-    push(`[${node.content}]`, node)
+    // +++
+    push(`[${node.content}]`, node) // +++
   }
 }
 
@@ -936,7 +946,7 @@ function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
   for (let i = 0; i < properties.length; i++) {
     const { key, value } = properties[i]
     // key
-    genExpressionAsPropertyKey(key, context)
+    genExpressionAsPropertyKey(key, context) // +++
     push(`: `)
     // value
     genNode(value, context)
@@ -981,13 +991,17 @@ function genFunctionExpression(
     push(`{`)
     indent()
   }
-  if (returns) {
-    if (newline) {
-      push(`return `)
+  if (returns) { // +++
+    if (newline) { // +++
+      push(`return `) // +++
     }
+
+    // +++
     if (isArray(returns)) {
-      genNodeListAsArray(returns, context)
+      // +++
+      genNodeListAsArray(returns, context) // ++++++
     } else {
+      // +++
       genNode(returns, context)
     }
   } else if (body) {

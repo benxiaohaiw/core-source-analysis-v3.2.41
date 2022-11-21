@@ -715,7 +715,7 @@ export function createCallExpression<T extends CallExpression['callee']>(
   } as InferCodegenNodeType<T>
 }
 
-// 创建函数表达式节点
+// 创建函数表达式节点 // +++
 export function createFunctionExpression(
   params: FunctionExpression['params'],
   returns: FunctionExpression['returns'] = undefined,
@@ -726,9 +726,10 @@ export function createFunctionExpression(
   return {
     type: NodeTypes.JS_FUNCTION_EXPRESSION, // js函数表达式
     params, // 参数
-    returns, // 返回值
+    // ++++++
+    returns, // 返回值 // ++++++
     newline,
-    isSlot,
+    isSlot, // +++ 是否为插槽
     loc
   }
 }

@@ -217,10 +217,13 @@ export const transformElement: NodeTransform = (node, context) => {
       if (shouldBuildAsSlots) {
         // 插槽 是否有动态插槽
         // vSlot.ts中的buildSlots函数
-        const { slots, hasDynamicSlots } = buildSlots(node, context) // 构建插槽
+        const { slots, hasDynamicSlots } = buildSlots(node, context) // 构建插槽 // +++
+        // 构建插槽 // +++
+        // <template #header="xxx"></template>
+        // -> { header: function (xxx) { return  } } - 这个对象直接作为创建组件vnode调用表达式的children参数 // +++
 
         // +++
-        // 虚拟节点的孩子直接是这个slots - 他有可能是对象属性组成的数组 或者 是一个createSlots函数调用（参数一个是对象，一个是数组）表达式节点
+        // 虚拟节点的孩子直接是这个slots - 他有可能是对象 或者 是一个createSlots【运行时函数】【调用（参数一个是对象，一个是数组）表达式节点】
         vnodeChildren = slots
         
         // +++

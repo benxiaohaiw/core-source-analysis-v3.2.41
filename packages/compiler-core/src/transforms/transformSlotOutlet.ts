@@ -29,11 +29,13 @@ export const transformSlotOutlet: NodeTransform = (node, context) => {
     // 准备插槽参数
     const slotArgs: CallExpression['arguments'] = [
       // true -> _ctx.$slots
-      context.prefixIdentifiers ? `_ctx.$slots` : `$slots`, // 这个是组件对应上下文中$slots它里面对应传给组件时的对应的插槽名和函数
+      // +++
+      context.prefixIdentifiers ? `_ctx.$slots` : `$slots`, // 这个是组件对应上下文中$slots它里面对应传给组件时的对应的插槽名和函数 // +++
       // 这样在renderSlots函数运行时里面就可以根据插槽名到传过来的插槽中找应该对应的vnode
       // 没有则使用这里代表默认要去显示vnode就可以啦
       // 这个renderSlots是在需要执行组件render函数时执行的，而render函数执行时会传入上下文，所以就能够获取相应的参数啦 ~
-      slotName, // 当前所代表的插槽名字
+      // +++
+      slotName, // 当前所代表的插槽名字 // +++
       '{}', // 要给这个插槽传入的属性
       'undefined', // 默认显示的
       'true'
@@ -58,10 +60,10 @@ export const transformSlotOutlet: NodeTransform = (node, context) => {
     // 移除没有使用的参数
 
     // +++
-    // RENDER_SLOT
+    // RENDER_SLOT -> renderSlot运行时函数 // +++
     node.codegenNode = createCallExpression( // 创建调用+++RENDER_SLOT+++表达式
       // +++
-      context.helper(RENDER_SLOT), // +++
+      context.helper(RENDER_SLOT), // +++ // +++
       slotArgs, // 调用表达式的参数
       loc
     )
