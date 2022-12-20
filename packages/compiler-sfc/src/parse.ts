@@ -303,6 +303,69 @@ export function parse(
   sourceToSFC.set(sourceKey, result)
   return result // 返回结果对象
 }
+/* 
+parse函数的大致流程：
+根据source + sourceMap + filename + sourceRoot + pad + compiler.parse准备sourceKey
+然后在sourceToSFC map中获取cache，有则直接返回
+准备descriptor对象
+const descriptor: SFCDescriptor = {
+  filename,
+  source,
+  template: null,
+  script: null,
+  scriptSetup: null,
+  styles: [],
+  customBlocks: [],
+  cssVars: [],
+  slotted: false,
+  shouldForceReload: prevImports => hmrShouldReload(prevImports, descriptor)
+}
+使用compiler.parse解析source，其中需要注意的是传递的options参数对象，能够得到ast语法树。【options对象需要注意，尤其是getTextMode函数导致的【文本模式】而影响的【解析逻辑】】
+{
+  // SFC 解析级别没有组件
+  // there are no components at SFC parsing level
+  isNativeTag: () => true, // 一律返回true // +++
+  // preserve all whitespaces
+  isPreTag: () => true, // 返回true // +++
+  // 获取文本模式
+  getTextMode: ({ tag, props }, parent) => {
+    // 除<template>外的所有顶级元素都被解析为raw text容器 // +++
+    // all top level elements except <template> are parsed as raw text
+    // containers
+    if (
+      (!parent && tag !== 'template') || // 顶级元素且标签不是template
+      // <template lang="xxx">也应被视为raw text
+      // <template lang="xxx"> should also be treated as raw text
+      (tag === 'template' &&
+        props.some(
+          p =>
+            p.type === NodeTypes.ATTRIBUTE &&
+            p.name === 'lang' &&
+            p.value &&
+            p.value.content &&
+            p.value.content !== 'html'
+        ))
+    ) {
+      return TextModes.RAWTEXT // 文本模式为RAWTEXT
+    } else {
+      // 其它的都是TextModes.DATA
+      return TextModes.DATA // 文本模式为DATA
+    }
+  },
+}
+遍历ast语法树（注意只遍历最顶级的一层），对每一个node的tag进行createBlock，该函数实际上就是准备block对象{type: node.tag, content, attrs对象（包含特殊的属性）, 还有特殊的属性单独放在此block对象中: lang、src、scoped、module、setup}
+switch node.tag
+  script
+  template
+  style
+  default - custom
+解析css变量
+descriptor.cssVars = parseCssVars(descriptor)
+检查描述符对象中style blocks中每一个block是否scoped且块的内容中::v-slotted或:slotted字样，若有就需要给描述符对象添加slotted属性值为true
+准备result对象{descriptor, errors}
+根据sourceToSFC=>result键值对存入sourceToSFC map中
+返回这个result对象
+*/
 
 function createDuplicateBlockError(
   node: ElementNode,

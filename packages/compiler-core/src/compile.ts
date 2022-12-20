@@ -38,7 +38,7 @@ export function getBaseTransformPreset(
       ...(__COMPAT__ ? [transformFilter] : []),
       ...(!__BROWSER__ && prefixIdentifiers
         ? [
-            // order is important
+            // order is important // 顺序是重要的 // +++
             trackVForSlotScopes,
             transformExpression
           ]
@@ -168,6 +168,183 @@ export function baseCompile(
     })
   )
 }
+/* 
+packages/compiler-dom/src/index.ts
+
+// 这里对最终的options对象做叙述 // +++
+{
+  // 注意这里面的getTextMode函数，它会影响parse解析逻辑的走向 // +++
+  ...parserOptions, // packages/compiler-dom/src/parserOptions.ts
+
+  ...options, // 上面的参数options对象 // +++
+
+  // 节点转换函数数组
+  nodeTransforms: [
+    // 忽略<script> 和 <tag>
+    // ignore <script> and <tag>
+    // this is not put inside DOMNodeTransforms because that list is used
+    // by compiler-ssr to generate vnode fallback branches
+    ignoreSideEffectTags, // 忽略副作用标签 // 它不会放在DOMNodeTransforms中，因为compiler-ssr使用该list来生成vnode回退分支
+    ...DOMNodeTransforms,
+    ...(options.nodeTransforms || [])
+  ],
+  // 指令转换函数对象
+  directiveTransforms: extend(
+    {},
+    DOMDirectiveTransforms,
+    options.directiveTransforms || {}
+  ),
+  // 转换提升
+  // 此优化仅在 Node.js 中执行。
+  // 浏览器端是没有此优化的
+  // 在compiler-core/src/transform.ts中进行的（也就是在转换阶段处理的）
+  // 此函数是在compiler-core/src/transforms/hoistStatic.ts里面使用的 // ===
+  // 详细的细节可以到compiler-dom/src/transforms/stringifyStatic.ts以及compiler-core/src/transforms/hoistStatic.ts下查看说明
+  transformHoist: __BROWSER__ ? null : stringifyStatic
+}
+
+// ===
+
+// 针对nodeTransforms以及directiveTransforms做特殊说明：
+nodeTransforms: [
+  // packages/compiler-dom/src/transforms
+  ignoreSideEffectTags,
+  transformStyle,
+  ...(__DEV__ ? [transformTransition] : []),
+
+  templateTransformAssetUrl, // packages/compiler-sfc/src/templateTransformAssetUrl.ts
+  templateTransformSrcset, // packages/compiler-sfc/src/templateTransformSrcset.ts
+],
+directiveTransforms: {
+  cloak: noopDirectiveTransform, // packages/compiler-core/src/transforms/noopDirectiveTransform.ts
+
+  // packages/compiler-dom/src/transforms
+  html: transformVHtml,
+  text: transformVText,
+  // 重写compiler-core
+  model: transformModel, // override compiler-core
+  on: transformOn, // override compiler-core
+  show: transformShow
+},
+transformHoist: __BROWSER__ ? null : stringifyStatic // // packages/compiler-dom/src/transforms
+*/
+
+/* 
+此函数具体功能：
+是否为模块模式 - options.mode === 'module'
+prefixIdentifiers - true
+// 1. 解析
+得到ast语法树 - baseParse(template, options) // packages/compiler-core/src/parse.ts
+得到默认的参数 - const [nodeTransforms, directiveTransforms] = getBaseTransformPreset(prefixIdentifiers)
+  // getBaseTransformPreset函数直接返回
+  return [
+    // 顺序
+    [
+      transformOnce,
+      transformIf,
+      transformMemo,
+      transformFor,
+      ...(__COMPAT__ ? [transformFilter] : []),
+      ...(!__BROWSER__ && prefixIdentifiers
+        ? [
+            // order is important // 顺序是重要的 // +++
+            trackVForSlotScopes,
+            transformExpression
+          ]
+        : __BROWSER__ && __DEV__
+        ? [transformExpression]
+        : []),
+      transformSlotOutlet,
+      transformElement,
+      trackSlotScopes,
+      transformText
+    ],
+    {
+      on: transformOn,
+      bind: transformBind,
+      model: transformModel
+    }
+  ]
+不是在浏览器端 且 options.isTS
+  options.expressionPlugins = [...(expressionPlugins || []), 'typescript']
+
+// 2. 转换
+transform(
+  ast,
+  extend({}, options, {
+    prefixIdentifiers,
+    nodeTransforms: [
+      ...nodeTransforms,
+      ...(options.nodeTransforms || []) // user transforms
+    ],
+    directiveTransforms: extend(
+      {},
+      directiveTransforms,
+      options.directiveTransforms || {} // user transforms
+    )
+  })
+) // packages/compiler-core/src/transform.ts
+
+// extend函数其实就是@vue/shared下的Object.assign函数
+
+// 3. 生成
+return generate(
+  ast,
+  extend({}, options, {
+    prefixIdentifiers
+  })
+) // packages/compiler-core/src/codegen.ts
+*/
+
+/* 
+这里对nodeTransforms以及directiveTransforms做特殊说明
+nodeTransforms: [
+  // packages/compiler-core/src/compile.ts
+    transformOnce,
+    transformIf,
+    transformMemo,
+    transformFor,
+    ...(__COMPAT__ ? [transformFilter] : []),
+    ...(!__BROWSER__ && prefixIdentifiers
+      ? [
+          // order is important // 顺序是重要的 // +++
+          trackVForSlotScopes,
+          transformExpression
+        ]
+      : __BROWSER__ && __DEV__
+      ? [transformExpression]
+      : []),
+    transformSlotOutlet,
+    transformElement,
+    trackSlotScopes,
+    transformText
+  // packages/compiler-dom/src/index.ts
+    // packages/compiler-dom/src/transforms
+    ignoreSideEffectTags,
+    transformStyle,
+    ...(__DEV__ ? [transformTransition] : []),
+
+    templateTransformAssetUrl, // packages/compiler-sfc/src/templateTransformAssetUrl.ts
+    templateTransformSrcset, // packages/compiler-sfc/src/templateTransformSrcset.ts
+]
+
+directiveTransforms: {
+  // packages/compiler-core/src/compile.ts
+    on: transformOn,
+    bind: transformBind,
+    model: transformModel
+  // packages/compiler-dom/src/index.ts
+    cloak: noopDirectiveTransform, // packages/compiler-core/src/transforms/noopDirectiveTransform.ts
+
+    // packages/compiler-dom/src/transforms
+    html: transformVHtml,
+    text: transformVText,
+    // 重写compiler-core
+    model: transformModel, // override compiler-core
+    on: transformOn, // override compiler-core
+    show: transformShow
+}
+*/
 
 
 /* 
